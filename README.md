@@ -51,6 +51,8 @@ Buttons under the page toolbar (keyboard shortcut in brackets):
 
 - **Reference tooltips**: hover over a reference such as `יהושע כב 20` and a tooltip shows `Joshua 22:20`. References are book + chapter in Hebrew letters + verse in digits, numbered as in the Hebrew Bible, which sometimes differs from English Bibles by a verse or a chapter. The tooltip reads the scan's hidden OCR text: book names are reliable, but chapter and verse are sometimes missing, and then only the book is shown.
 
+- **English refs** (E): writes references in English directly on the page (`Josh 22:20` in place of `יהושע כב 20`). This is done only where the scan's OCR read book, chapter and verse completely and the chapter exists in that book. On the pages tested that is about half of the references; the rest stay in Hebrew (hover them for the tooltip). Switch it off to see the original.
+
 The settings are remembered.
 
 Press Enter to open the first result, use ← → for the previous and next page, and `/` to jump to the search box. There is an on-screen Hebrew keypad.
