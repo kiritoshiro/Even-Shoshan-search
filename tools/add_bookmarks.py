@@ -7,11 +7,16 @@ The input must be the 1,316-page Internet Archive scan the index was made for.
 Writes a new file (default: <input> - bookmarked.pdf); the original is not changed.
 
 Adds:
-  * an outline: Front matter, then one bookmark per Hebrew letter, and under each
-    letter one bookmark per page ("340  זרח – זרע"), then Back matter;
+  * an outline: the English introduction by section (including the key to
+    abbreviations, books of the Bible, verbal stems and numbers), then one bookmark
+    per Hebrew letter ("ז (Zayin)"), and under each letter one bookmark per page
+    with English glosses in parentheses ("340  זרח (to rise) – זרע (seed)"),
+    then Back matter. Glosses come from STEPBible TBESH (CC BY 4.0);
   * page labels, so PDF viewers show and accept the book's printed page numbers
     (pages that are blank, dividers or plates show their PDF position in brackets).
 """
+import json
+import re
 import sys
 from pathlib import Path
 
@@ -21,6 +26,50 @@ ROOT = Path(__file__).resolve().parent.parent
 EXPECTED_PAGES = 1316
 LETTERS = "אבגדהוזחטיכלמנסעפצקרשת"
 FINALS = str.maketrans("ךםןףץ", "כמנפצ")
+LETTER_NAMES = ["Alef", "Bet", "Gimel", "Dalet", "He", "Vav", "Zayin", "Het", "Tet", "Yod", "Kaf",
+                "Lamed", "Mem", "Nun", "Samekh", "Ayin", "Pe", "Tsadi", "Qof", "Resh", "Shin / Sin", "Tav"]
+
+# English introduction (John H. Sailhamer) in this scan: (title, 1-based PDF page), in section order.
+# The scan stores these pages in reverse, so the PDF pages run backwards.
+INTRO = [
+    ("Preface", 14),
+    ("1.1 Order of the entry words", 15),
+    ("1.2–1.4 Derivatives, order within entries, citations", 12),
+    ("1.5–1.6 Definitions, the Hebrew text, Ketib/Qere", 13),
+    ("1.6.3–2.3 Vocalization, collocations", 10),
+    ("2.4–2.6 Difficult verbal forms, vocalization, accents", 11),
+    ("2.6–3.1.1 Pausal forms, maqqeph, Masorah, high-frequency words", 8),
+    ("3.1.2–3.2 Parenthesis, ellipsis, abbreviations, word divisions", 9),
+    ("3.3–3.5.1 Similar words, Aramaic, general abbreviations and terms", 6),
+    ("3.5.2–3.6.2 Books of the Bible, verbal stems, numbers, sequence", 7),
+    ("3.6.3–3.6.4 Sequence of nominal forms and pronouns", 4),
+]
+EDITORS_PREFACE = 1309
+
+
+def cons_key(word):
+    return re.sub(r"\s+", " ", re.sub(r"[^א-ת ]", "", word.replace("־", " "))).strip().translate(FINALS)
+
+
+def load_glosses():
+    """Consonant spelling -> short English gloss, preferring common words over proper names."""
+    js = (ROOT / "src" / "data" / "lexicon.js").read_text(encoding="utf-8")
+    rows = json.loads(js[js.index("=") + 1:].rstrip().rstrip(";"))
+    best = {}
+    for strong, heb, _tr, pos, gloss, _d in rows:
+        k = cons_key(heb)
+        rank = 1 if pos.startswith("N:") else 0
+        if k and gloss and (k not in best or rank < best[k][0]):
+            best[k] = (rank, gloss)
+    return {k: g for k, (_, g) in best.items()}
+
+
+def with_gloss(word, glosses):
+    g = glosses.get(cons_key(word))
+    if not g:
+        return word
+    g = g if len(g) <= 28 else g[:27].rstrip() + "…"
+    return f"{word} ({g})"
 
 
 def load_index():
@@ -50,7 +99,9 @@ def main():
 
     rows = load_index()
     body = sorted((r for r in rows if r[1] > 0), key=lambda r: r[1])
-    toc = [[1, "Front matter (English introduction, Hebrew preface)", 1]]
+    glosses = load_glosses()
+    toc = [[1, "Front matter", 1], [1, "English introduction (John H. Sailhamer)", INTRO[1][1]]]
+    toc += [[2, title, page] for title, page in INTRO]
 
     # A letter starts on the first page whose last head begins with it (or a later letter).
     letter_at, li = {}, 0
@@ -64,13 +115,15 @@ def main():
         for L in LETTERS:
             if letter_at.get(L) == printed and L != current:
                 current = L
-                toc.append([1, L, idx + 1])
-        heads = first if first == last or not last else f"{first} – {last}"
+                toc.append([1, f"{L} ({LETTER_NAMES[LETTERS.index(L)]})", idx + 1])
+        first_g, last_g = with_gloss(first, glosses), with_gloss(last, glosses)
+        heads = first_g if first == last or not last else f"{first_g} – {last_g}"
         toc.append([2, f"{printed}  {heads}".replace("?", "…"), idx + 1])
 
     last_body = max(r[0] for r in body)
     if last_body + 1 < doc.page_count:
         toc.append([1, "Back matter", last_body + 2])
+    toc.append([1, "Editor's preface (English)", EDITORS_PREFACE])
     doc.set_toc(toc)
 
     labels = []

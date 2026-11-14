@@ -19,7 +19,8 @@ The page index was made for the Baker edition scan from the Internet Archive wit
 
 `tools/add_bookmarks.py` writes a copy of your scan with:
 
-- an outline: one bookmark per Hebrew letter, and under it one per page (`340  זרח – זרע`);
+- an outline of the English introduction by section, including the key to abbreviations, books of the Bible, verbal stems and Hebrew numbers;
+- one bookmark per Hebrew letter (`ז (Zayin)`), and under it one per page with English glosses in parentheses (`340  זרח (to rise) – זרע (to sow)`);
 - page labels, so any PDF viewer shows the book's printed page numbers and "go to page 340" works. Blank pages, dividers and plates show their PDF position in brackets, e.g. `[205]`.
 
 ```bash
