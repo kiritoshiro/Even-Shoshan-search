@@ -30,6 +30,16 @@ python tools/add_bookmarks.py "path/to/your-scan.pdf"     # writes "… - bookma
 
 The bookmarked copy has the same pages in the same order, so the app works with it too.
 
+## Contents tab
+
+The sidebar's **Contents** tab is the same outline as the PDF bookmarks, for navigating in the app:
+
+- **English introduction:** each section, including the key to books of the Bible, verbal stems and Hebrew numbers.
+- **Concordance:** one entry per Hebrew letter with its page range, opening to every page with its head words and English glosses.
+- **Back matter:** the editor's English preface.
+
+The page you are reading stays highlighted.
+
 ## How to search
 
 | Type | Example | Result |

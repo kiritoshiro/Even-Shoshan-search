@@ -107,7 +107,7 @@ const VIEW={clean:false,strength:60,dark:false,loupe:false,eng:false};
 try{ Object.assign(VIEW,JSON.parse(localStorage.getItem('es-view')||'{}')) }catch(e){}
 const saveView=()=>{ try{ localStorage.setItem('es-view',JSON.stringify(VIEW)) }catch(e){} };
 const DPR=()=>window.devicePixelRatio||1;
-function setHeads(b){ $('heads').innerHTML = b?`${esc(b.first)} <span style="color:var(--mute)">…</span> ${esc(b.last)}`:''; }
+function setHeads(b){ $('heads').innerHTML = !b?'':b.title?`<span dir="ltr" style="font:600 14px system-ui">${esc(b.title)}</span>`:`${esc(b.first)} <span style="color:var(--mute)">…</span> ${esc(b.last)}`; }
 
 // --- pixel filter: grayscale, levels from this page's own histogram, gentle gamma; optional dark ---
 function filterInto(src, dst){
@@ -168,9 +168,10 @@ async function columnsFor(b){
 const colRange=(e,k)=>[e[2-k],e[3-k]];
 
 async function show(page, c=null){
-  page=Math.max(MINPAGE,Math.min(MAXPAGE,page));
-  const b=BYPAGE.get(page); cur=page; col=c; $('pg').value=page; setHeads(b);
-  try{ localStorage.setItem('es-page',page) }catch(e){}
+  if(page>0) page=Math.max(MINPAGE,Math.min(MAXPAGE,page));   // negative = front/back matter (contents.js)
+  const b=BYPAGE.get(page); cur=page; col=c; $('pg').value=page>0?page:''; setHeads(b);
+  if(window.onShowPage) onShowPage(page);
+  try{ if(page>0) localStorage.setItem('es-page',page) }catch(e){}
   updateColUI();
   if(!pdf||!b) return;
   const seq=++renderSeq;
@@ -194,7 +195,7 @@ async function show(page, c=null){
 
 // step over pages that are blank, section dividers or missing from the scan
 function nextPage(p,d){ p+=d; while(p>=MINPAGE&&p<=MAXPAGE&&!BYPAGE.has(p)) p+=d; return BYPAGE.has(p)?p:null; }
-function step(d){ const p=nextPage(cur,d); if(p) show(p, col==null?null:(d>0?0:2)); }
+function step(d){ if(cur<0&&window.stepExtra) return stepExtra(d); const p=nextPage(cur,d); if(p) show(p, col==null?null:(d>0?0:2)); }
 function stepCol(d){
   if(col==null) return;
   const k=col+d;
