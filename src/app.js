@@ -103,7 +103,7 @@ $('kbd').addEventListener('click',e=>{const c=e.target.closest('button'); if(!c)
 // pure black and white, so vowel points and dagesh survive at every setting.
 let pdf=null, cur=null, col=null, zoomMul=1, renderTask=null, renderSeq=0, view=null;
 const raw=document.createElement('canvas');
-const VIEW={clean:false,strength:60,dark:false,loupe:false};
+const VIEW={clean:false,strength:60,dark:false,loupe:false,eng:false};
 try{ Object.assign(VIEW,JSON.parse(localStorage.getItem('es-view')||'{}')) }catch(e){}
 const saveView=()=>{ try{ localStorage.setItem('es-view',JSON.stringify(VIEW)) }catch(e){} };
 const DPR=()=>window.devicePixelRatio||1;
@@ -131,7 +131,16 @@ function filterInto(src, dst){
   for(let i=0;i<n;i+=4){ const v=((d[i]*77+d[i+1]*150+d[i+2]*29)>>8)*3; d[i]=lut[v]; d[i+1]=lut[v+1]; d[i+2]=lut[v+2]; }
   ctx.putImageData(img,0,0);
 }
-function repaint(){ const cv=$('cv'); if(!raw.width) return; filterInto(raw,cv); cv.style.background=VIEW.dark?'#1b1a18':'#fff'; hires=null; }
+function repaint(){
+  const cv=$('cv'); if(!raw.width) return; filterInto(raw,cv); cv.style.background=VIEW.dark?'#1b1a18':'#fff'; hires=null;
+  if(VIEW.eng&&view&&view.refs) ESRefs.drawOverlay(cv, view.refs, view.x0, view.s*DPR(), VIEW.dark, view.zones);
+}
+// English references: load this page's overlay list once, then repaint
+async function loadRefs(){ if(!VIEW.eng||!view||view.refs||!window.ESRefs) return; const v=view;
+  const b=BYPAGE.get(v.page), e=await columnsFor(b), W=(await pdf.getPage(b.idx+1)).getViewport({scale:1}).width;
+  // the reference area is the left ~40% of each column
+  v.zones=[0,1,2].map(k=>[e[k]*W, (e[k]+(e[k+1]-e[k])*.42)*W]);
+  v.refs=await ESRefs.pageRefs(pdf, b.idx); if(v===view) repaint(); }
 
 // --- column detection: the three columns are separated by thin vertical rules ---
 const COLS=new Map();   // printed page -> [x0,x1,x2,x3] as fractions of page width, left to right
@@ -174,12 +183,13 @@ async function show(page, c=null){
   const vp=p.getViewport({scale:s*DPR(),offsetX:-x0*s*DPR()});
   if(renderTask) try{renderTask.cancel()}catch(e){}
   raw.width=Math.round((x1-x0)*s*DPR()); raw.height=Math.round(vp.height);
-  view={page,col,x0,x1,s};
+  view={page,col,x0,x1,s,h:base.height};
   cv.hidden=false; $('empty').hidden=true; cv.classList.add('busy');
   renderTask=p.render({canvasContext:raw.getContext('2d'),viewport:vp});
   try{ await renderTask.promise; }catch(e){ return; }
   if(seq!==renderSeq) return;
   repaint(); cv.style.width=(raw.width/DPR())+'px'; cv.classList.remove('busy'); stage.scrollTop=0;
+  loadRefs();
 }
 
 // step over pages that are blank, section dividers or missing from the scan
@@ -210,10 +220,11 @@ function updateColUI(){
 }
 function syncToggles(){
   $('clean').classList.toggle('on',VIEW.clean); $('dark').classList.toggle('on',VIEW.dark);
-  $('loupeBtn').classList.toggle('on',VIEW.loupe); $('strength').value=VIEW.strength; $('strength').disabled=!VIEW.clean;
+  $('loupeBtn').classList.toggle('on',VIEW.loupe); $('engBtn').classList.toggle('on',VIEW.eng); $('strength').value=VIEW.strength; $('strength').disabled=!VIEW.clean;
 }
 $('clean').onclick=()=>{VIEW.clean=!VIEW.clean;saveView();syncToggles();repaint()};
 $('dark').onclick=()=>{VIEW.dark=!VIEW.dark;saveView();syncToggles();repaint()};
+$('engBtn').onclick=()=>{VIEW.eng=!VIEW.eng;saveView();syncToggles();repaint();loadRefs()};
 let sT; $('strength').oninput=e=>{VIEW.strength=+e.target.value;saveView();clearTimeout(sT);sT=setTimeout(repaint,60)};
 $('cols').onclick=()=>{ if(col!=null){picking=false;show(cur,null);} else {picking=!picking;updateColUI();} };
 $('colPrev').onclick=()=>stepCol(-1);
@@ -230,7 +241,7 @@ syncToggles();
 
 // --- magnifier: a separate high-resolution render of the same view (about the scan's native 350 dpi) ---
 let hires=null, hiresBusy=null, shiftDown=false, lastMouse=null;
-const hiresKey=()=>JSON.stringify([view.page,view.col,view.s,VIEW.clean,VIEW.strength,VIEW.dark]);
+const hiresKey=()=>JSON.stringify([view.page,view.col,view.s,VIEW.clean,VIEW.strength,VIEW.dark,VIEW.eng&&!!view.refs]);
 async function ensureHires(){
   const key=hiresKey();
   if(hires&&hires.key===key) return hires;
@@ -245,6 +256,7 @@ async function ensureHires(){
       c.width=Math.round((v.x1-v.x0)*s); c.height=Math.round(vp.height);
       await p.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
       const out=document.createElement('canvas'); filterInto(c,out);
+      if(VIEW.eng&&v.refs) ESRefs.drawOverlay(out, v.refs, v.x0, s, VIEW.dark, v.zones);
       hires={key,canvas:out}; return hires;
     } finally { hiresBusy=null; }
   })();
@@ -268,7 +280,23 @@ function drawLoupe(ev){
     ensureHires().then(()=>{ if(lastMouse&&(VIEW.loupe||shiftDown)) drawLoupe(lastMouse); }).catch(()=>{});
   }
 }
-document.addEventListener('mousemove',e=>{ lastMouse=e; shiftDown=e.shiftKey; if(VIEW.loupe||e.shiftKey) drawLoupe(e); else if(!loupe.hidden) hideLoupe(); });
+document.addEventListener('mousemove',e=>{ lastMouse=e; shiftDown=e.shiftKey; if(VIEW.loupe||e.shiftKey) drawLoupe(e); else if(!loupe.hidden) hideLoupe(); refTip(e); });
+
+// --- Bible-reference tooltips (see refs.js) ---
+const tip=$('reftip'); let tipSeq=0;
+async function refTip(ev){
+  const seq=++tipSeq, cv=$('cv'), r=cv.getBoundingClientRect();
+  if(!pdf||!view||cv.hidden||!window.ESRefs||ev.clientX<r.left||ev.clientX>r.right||ev.clientY<r.top||ev.clientY>r.bottom){ tip.hidden=true; return; }
+  const x=view.x0+(ev.clientX-r.left)/r.width*(view.x1-view.x0), y=(ev.clientY-r.top)/r.height*view.h;
+  const refs=await ESRefs.refsAt(pdf, BYPAGE.get(view.page).idx, x, y);
+  if(seq!==tipSeq) return;
+  if(!refs.length){ tip.hidden=true; return; }
+  const f=refs[0];
+  tip.innerHTML=`<span class="he">${esc(f.heb)}</span>${esc(f.ref)}`;
+  const big=!loupe.hidden?160:14;
+  tip.style.left=Math.min(innerWidth-tip.offsetWidth-8, ev.clientX+big)+'px'; tip.style.top=(ev.clientY+big)+'px';
+  tip.hidden=false;
+}
 document.addEventListener('keyup',e=>{ if(e.key==='Shift'){ shiftDown=false; if(!VIEW.loupe) hideLoupe(); } });
 $('stage').addEventListener('scroll',()=>{ if(lastMouse&&!loupe.hidden) drawLoupe(lastMouse); });
 
@@ -287,6 +315,7 @@ document.addEventListener('keydown',e=>{
   if(k==='d') $('dark').click();
   if(k==='k') $('cols').click();
   if(k==='m') $('loupeBtn').click();
+  if(k==='e') $('engBtn').click();
 });
 let rz; window.addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(()=>cur&&show(cur,col),200); });
 
@@ -295,7 +324,7 @@ let rz; window.addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout((
 // Plain browser: file picker; Chrome/Edge remember the file handle in IndexedDB.
 const TAURI = window.__TAURI__;
 const BTN = $('openBtn');
-function opened(){ BTN.textContent='Change PDF…'; BTN.classList.remove('primary'); COLS.clear(); hires=null; show(cur||MINPAGE); }
+function opened(){ BTN.textContent='Change PDF…'; BTN.classList.remove('primary'); COLS.clear(); hires=null; if(window.ESRefs) ESRefs.clear(); show(cur||MINPAGE); }
 async function load(src, label){
   BTN.textContent='Loading…';
   try{
