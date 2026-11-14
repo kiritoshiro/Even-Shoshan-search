@@ -4,10 +4,27 @@
 // BYPAGE under negative keys (-PDF page) and shown by the normal viewer.
 (function(){
 const LETTERS='אבגדהוזחטיכלמנסעפצקרשת';
-const NAMES=['Alef','Bet','Gimel','Dalet','He','Vav','Zayin','Het','Tet','Yod','Kaf','Lamed','Mem','Nun',
-             'Samekh','Ayin','Pe','Tsadi','Qof','Resh','Shin / Sin','Tav'];
+const LT=window.I18N&&I18N.lang==='lt';
+const NAMES=LT?['Alef','Bet','Gimel','Dalet','He','Vav','Zain','Chet','Tet','Jod','Kaf','Lamed','Mem','Nun',
+                'Samech','Ajin','Pe','Cadi','Kof','Reš','Šin / Sin','Tav']
+              :['Alef','Bet','Gimel','Dalet','He','Vav','Zayin','Het','Tet','Yod','Kaf','Lamed','Mem','Nun',
+                'Samekh','Ayin','Pe','Tsadi','Qof','Resh','Shin / Sin','Tav'];
 // [title, 1-based PDF page] of the 1,316-page scan, in reading order
-const FRONT=[
+// the introduction itself is in English; in Lithuanian mode only these titles are translated
+const FRONT=(LT?[
+  ['Antraštiniai puslapiai',1],
+  ['Pratarmė (anglų k.)',14],
+  ['1.1 Antraštinių žodžių tvarka',15],
+  ['1.2–1.4 Vediniai, tvarka straipsnyje, citavimas',12],
+  ['1.5–1.6 Reikšmės, hebrajiškas tekstas, ketiv/kerė',13],
+  ['1.6.3–2.3 Vokalizacija, junginiai',10],
+  ['2.4–2.6 Sunkios veiksmažodžių formos, vokalizacija, kirčiai',11],
+  ['2.6–3.1.1 Pauzinės formos, makafas, masora, dažni žodžiai',8],
+  ['3.1.2–3.2 Skliaustai, daugtaškis, santrumpos, reikšmių skyrimas',9],
+  ['3.3–3.5.1 Panašūs žodžiai, aramėjų kalba, bendrosios santrumpos',6],
+  ['3.5.2–3.6.2 Biblijos knygos, veiksmažodžių kamienai, skaičiai',7],
+  ['3.6.3–3.6.4 Daiktavardžių formų ir įvardžių tvarka',4],
+]:[
   ['Title pages',1],
   ['Preface (English)',14],
   ['1.1 Order of the entry words',15],
@@ -20,8 +37,8 @@ const FRONT=[
   ['3.3–3.5.1 Similar words, Aramaic, general abbreviations',6],
   ['3.5.2–3.6.2 Books of the Bible, verbal stems, numbers',7],
   ['3.6.3–3.6.4 Sequence of nominal forms and pronouns',4],
-];
-const BACK=[["Editor's preface (English)",1309]];
+]);
+const BACK=[[LT?'Redaktoriaus pratarmė (anglų k.)':"Editor's preface (English)",1309]];
 const EXTRA=[...FRONT,...BACK];
 for(const [title,pdfPage] of EXTRA) BYPAGE.set(-pdfPage,{idx:pdfPage-1,page:-pdfPage,first:'',last:'',title});
 window.stepExtra=d=>{
@@ -33,7 +50,7 @@ window.stepExtra=d=>{
 // English gloss per consonant spelling, preferring ordinary words over proper names
 const GLOSS=new Map();
 for(const r of LEXI){ const k=key(r.h); if(!k||!r.g) continue; const name=r.p.startsWith('N:');
-  const old=GLOSS.get(k); if(!old||old.name&&!name) GLOSS.set(k,{g:r.g,name}); }
+  const old=GLOSS.get(k); if(!old||old.name&&!name) GLOSS.set(k,{g:LT&&r.lt?r.lt:r.g,name}); }
 const gloss=w=>{ const g=GLOSS.get(key(w)); return g?(g.g.length>26?g.g.slice(0,25)+'…':g.g):''; };
 
 // a letter starts on the first page whose last head begins with it (or a later letter)
@@ -53,12 +70,12 @@ const pageBtn=b=>{
   return `<button class="it" data-p="${b.page}"><span class="pn">${b.page}</span><span class="he">${heads}</span>${gl?` <span class="gl">(${esc(gl)})</span>`:''}</button>`;
 };
 toc.innerHTML=
-  `<div class="sec">English introduction</div>`+
+  `<div class="sec">${T('intro')}</div>`+
   FRONT.map(([t,p])=>`<button class="it" data-p="${-p}">${esc(t)}</button>`).join('')+
-  `<div class="sec">Concordance</div>`+
+  `<div class="sec">${T('concordance')}</div>`+
   groups.map((g,i)=>`<details data-g="${i}"><summary><span class="L he">${g.L}</span><span>${g.name}</span>`+
-    `<span class="rng">pp. ${g.pages[0].page}–${g.pages[g.pages.length-1].page}</span></summary><div class="pages"></div></details>`).join('')+
-  `<div class="sec">Back matter</div>`+
+    `<span class="rng">${T('pp',{a:g.pages[0].page,b:g.pages[g.pages.length-1].page})}</span></summary><div class="pages"></div></details>`).join('')+
+  `<div class="sec">${T('back')}</div>`+
   BACK.map(([t,p])=>`<button class="it" data-p="${-p}">${esc(t)}</button>`).join('');
 
 // fill a letter's page list the first time it is opened
