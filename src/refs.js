@@ -12,6 +12,21 @@ const BOOKS=[
   ['דניאל','Daniel'],['עזרא','Ezra'],['נחמיה','Nehemiah'],['דה"א','1 Chronicles'],['דה"ב','2 Chronicles'],
 ];
 const NAME=new Map(BOOKS);
+// Lithuanian: RK 1999 abbreviation and book name (same conventions as the user's other Lithuanian projects)
+const LT={'Genesis':['Pr','Pradžios knyga'],'Exodus':['Iš','Išėjimo knyga'],'Leviticus':['Kun','Kunigų knyga'],
+  'Numbers':['Sk','Skaičių knyga'],'Deuteronomy':['Įst','Pakartoto Įstatymo knyga'],'Joshua':['Joz','Jozuės knyga'],
+  'Judges':['Ts','Teisėjų knyga'],'1 Samuel':['1 Sam','1 Samuelio knyga'],'2 Samuel':['2 Sam','2 Samuelio knyga'],
+  '1 Kings':['1 Kar','1 Karalių knyga'],'2 Kings':['2 Kar','2 Karalių knyga'],'Isaiah':['Iz','Izaijo knyga'],
+  'Jeremiah':['Jer','Jeremijo knyga'],'Ezekiel':['Ez','Ezechielio knyga'],'Hosea':['Oz','Ozėjo knyga'],'Joel':['Jl','Joelio knyga'],
+  'Amos':['Am','Amoso knyga'],'Obadiah':['Abd','Abdijo knyga'],'Jonah':['Jon','Jonos knyga'],'Micah':['Mch','Michėjo knyga'],
+  'Nahum':['Nah','Nahumo knyga'],'Habakkuk':['Hab','Habakuko knyga'],'Zephaniah':['Sof','Sofonijo knyga'],'Haggai':['Ag','Agėjo knyga'],
+  'Zechariah':['Zch','Zacharijo knyga'],'Malachi':['Mal','Malachijo knyga'],'Psalms':['Ps','Psalmynas'],'Proverbs':['Pat','Patarlių knyga'],
+  'Job':['Job','Jobo knyga'],'Song of Songs':['Gg','Giesmių giesmė'],'Ruth':['Rut','Rūtos knyga'],'Lamentations':['Rd','Raudų knyga'],
+  'Ecclesiastes':['Mok','Mokytojo knyga'],'Esther':['Est','Esteros knyga'],'Daniel':['Dan','Danieliaus knyga'],'Ezra':['Ezr','Ezros knyga'],
+  'Nehemiah':['Neh','Nehemijo knyga'],'1 Chronicles':['1 Met','1 Metraščių knyga'],'2 Chronicles':['2 Met','2 Metraščių knyga']};
+const LANG=()=>window.I18N?I18N.lang:'en';
+// "Joshua 22:20" in English, "Jozuės knyga 22, 20" in Lithuanian (RK citation style)
+const fullRef=r=>LANG()==='lt'?`${LT[r.en][1]}${r.ch?' '+r.ch+(r.vs?', '+r.vs:''):''}`:r.ref;
 const VAL={'א':1,'ב':2,'ג':3,'ד':4,'ה':5,'ו':6,'ז':7,'ח':8,'ט':9,'י':10,'כ':20,'ך':20,'ל':30,'מ':40,'ם':40,'נ':50,'ן':50,'ס':60,'ע':70,'פ':80,'ף':80,'צ':90,'ץ':90,'ק':100,'ר':200,'ש':300,'ת':400};
 const hebNum=s=>{ let n=0; for(const c of s){ if(!VAL[c]) return 0; n+=VAL[c]; } return n; };
 
@@ -111,11 +126,11 @@ async function pageRefs(doc, idx){
         // the item is just the book name: translate the name, leave the printed chapter/verse untouched
         const word=logical(it.str).trim();
         if(word===r.heb||!word.includes(' ')&&word.length>=4&&!/\d/.test(word))
-          out.push({x0:it.x0,x1:it.x1,by:it.by,text:ABBR[r.en],ref:r,bookOnly:true});
+          out.push({x0:it.x0,x1:it.x1,by:it.by,text:LANG()==='lt'?LT[r.en][0]:ABBR[r.en],ref:r,bookOnly:true});
         continue;
       }
       out.push({x0:Math.min(...box.map(b=>b.x0)),x1:Math.max(...box.map(b=>b.x1)),by:it.by,
-                text:`${ABBR[r.en]} ${r.ch}:${r.vs}`, ref:r});
+                text:LANG()==='lt'?`${LT[r.en][0]} ${r.ch}, ${r.vs}`:`${ABBR[r.en]} ${r.ch}:${r.vs}`, ref:r});
     }
   }
   overlays.set(idx,out); return out;
@@ -154,5 +169,5 @@ function drawOverlay(canvas, refs, x0, scale, dark, zones){
     ctx.fillText(o.text, R-1*scale, (o.by-0.4-x0*0)*scale);
   }
 }
-window.ESRefs={refsAt, pageRefs, drawOverlay, parse, logical, clear:()=>{cache.clear();overlays.clear();}};
+window.ESRefs={fullRef,refsAt, pageRefs, drawOverlay, parse, logical, clear:()=>{cache.clear();overlays.clear();}};
 })();

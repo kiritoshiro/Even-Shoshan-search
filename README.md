@@ -30,6 +30,26 @@ python tools/add_bookmarks.py "path/to/your-scan.pdf"     # writes "… - bookma
 
 The bookmarked copy has the same pages in the same order, so the app works with it too.
 
+## Lietuvių kalba / Lithuanian
+
+The **LT** button at the top switches the whole app to Lithuanian, and **EN** switches it back. The choice is remembered.
+
+- The interface, the Contents tab and the introduction titles are in Lithuanian. The introduction text itself is in English, as in the book.
+- Glosses are in Lithuanian, translated from the Hebrew word rather than from the English gloss. When several Hebrew words share one English gloss, each gets its own Lithuanian word. Lithuanian Bible (RK 1999) vocabulary is used where it applies. The English gloss is shown after the Lithuanian one.
+- Search accepts Lithuanian words, and letters with or without diacritics (`seti` finds `sėti`).
+- Bible references use RK abbreviations and citation style: `Joz 22, 20`. The tooltip shows `Jozuės knyga 22, 20`. RK follows the Hebrew chapter and verse numbering, as this concordance does.
+- The Lithuanian glosses (`data/glosses-lt.tsv`) are machine-assisted translations and have not been reviewed by a translator. Corrections are welcome.
+
+## Contents tab
+
+The sidebar's **Contents** tab is the same outline as the PDF bookmarks, for navigating in the app:
+
+- **English introduction:** each section, including the key to books of the Bible, verbal stems and Hebrew numbers.
+- **Concordance:** one entry per Hebrew letter with its page range, opening to every page with its head words and English glosses.
+- **Back matter:** the editor's English preface.
+
+The page you are reading stays highlighted.
+
 ## How to search
 
 | Type | Example | Result |

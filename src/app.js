@@ -1,3 +1,5 @@
+// interface text in the chosen language (i18n.js)
+if(window.I18N){ I18N.applyStatic(); document.getElementById('langBtn').onclick=()=>I18N.setLang(I18N.lang==='lt'?'en':'lt'); }
 const PAGES = window.ES_PAGES;   // [pdfIndex, printedPage, firstHead, lastHead]
 const LEX = window.ES_LEX;       // [strong, hebrew, translit, pos, gloss, def]
 const EXPECTED_PAGES = 1316;
@@ -34,7 +36,13 @@ function pageFor(heb){
 
 // ---------- search ----------
 const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[.'’ʼʾʿ`\-\s]/g,'');
-const LEXI = LEX.map((r,i)=>({i,s:r[0],h:r[1],t:r[2],p:r[3],g:r[4],d:r[5],k:key(r[1]),tn:norm(r[2]),gl:r[4].toLowerCase(),dl:r[5].toLowerCase()}));
+const LT = window.ES_LEX_LT||{}, LANG = window.I18N?I18N.lang:'en';
+// Lithuanian matching ignores diacritics, so "seti" finds "sėti"
+const fold = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+const LEXI = LEX.map((r,i)=>({i,s:r[0],h:r[1],t:r[2],p:r[3],g:r[4],d:r[5],k:key(r[1]),tn:norm(r[2]),gl:r[4].toLowerCase(),dl:r[5].toLowerCase(),
+  lt:ltFor(r), ltf:fold(ltFor(r))}));
+// Lithuanian gloss of a lexicon row: its own Hebrew word first, then the shared English gloss
+function ltFor(r){ return LT[r[4]+'|'+r[1].replace(/[^א-ת]/g,'')]||LT[r[4]]||''; }
 function search(q){
   q=q.trim(); if(!q) return {lex:[],direct:null};
   let m;
@@ -50,10 +58,13 @@ function search(q){
   }
   const ql=q.toLowerCase(), qn=norm(q), words=ql.split(/\s+/);
   const re=new RegExp('(^|[^a-z])'+ql.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'($|[^a-z])');
+  const qf=fold(q), reL=new RegExp('(^|[^a-z])'+qf.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'($|[^a-z])'), bonus=LANG==='lt'?5:0;
   const scored=[];
   for(const r of LEXI){
     let s=0;
-    if(r.gl===ql||r.gl==='to '+ql) s=100;
+    if(r.ltf&&r.ltf===qf) s=100+bonus;
+    else if(r.gl===ql||r.gl==='to '+ql) s=100;
+    else if(r.ltf&&qf.length>=3&&reL.test(r.ltf)) s=70+bonus-Math.min(20,r.ltf.length/4);
     else if(r.tn===qn) s=90;
     else if(re.test(r.gl)) s=70-Math.min(20,r.gl.length/4);
     else if(r.tn.startsWith(qn)&&qn.length>=2) s=50;
@@ -72,16 +83,18 @@ function render(q){
   if(direct){
     let b=direct.page?BYPAGE.get(nearest(direct.page)):pageFor(direct.heb);
     if(b){
-      out.push(`<div class="sec">Go to</div><button class="res" data-p="${b.page}"><div class="top"><span class="heb he">${esc(direct.heb||'')}</span><span class="meta">${direct.heb?'alphabetical position':''}</span><span class="pg">p. ${b.page}</span></div><div class="meta">Page runs <span class="he">${esc(b.first)}</span> → <span class="he">${esc(b.last)}</span></div></button>`);
-    } else if(direct.page) out.push(`<div class="sec">No page ${direct.page} (pages ${MINPAGE}–${MAXPAGE})</div>`);
+      out.push(`<div class="sec">${T('goTo')}</div><button class="res" data-p="${b.page}"><div class="top"><span class="heb he">${esc(direct.heb||'')}</span><span class="meta">${direct.heb?T('alpha'):''}</span><span class="pg">${T('pAbbr')} ${b.page}</span></div><div class="meta">${T('pageRuns')} <span class="he">${esc(b.first)}</span> → <span class="he">${esc(b.last)}</span></div></button>`);
+    } else if(direct.page) out.push(`<div class="sec">${T('noPage',{p:direct.page,a:MINPAGE,b:MAXPAGE})}</div>`);
   }
   if(lex.length){
-    out.push(`<div class="sec">${lex.length} lexicon match${lex.length>1?'es':''}</div>`);
+    out.push(`<div class="sec">${T(lex.length>1?'matchesN':'matches1',{n:lex.length})}</div>`);
     for(const r of lex){
       const b=pageFor(r.h);
-      out.push(`<button class="res" data-p="${b?b.page:''}"><div class="top"><span class="heb he">${esc(r.h)}</span><span class="tr">${esc(r.t)}</span><span class="pg">${b?'p. '+b.page:''}</span></div><div><span class="gl">${esc(r.g)}</span> <span class="meta">· ${esc(r.s)} · ${esc(r.p)}</span></div><div class="df">${esc(r.d)}</div></button>`);
+      // Lithuanian mode: Lithuanian gloss first, English after it
+      const gl=LANG==='lt'&&r.lt?`<span class="gl">${esc(r.lt)}</span> <span class="meta">(${esc(r.g)})</span>`:`<span class="gl">${esc(r.g)}</span>${r.lt?` <span class="meta">(${esc(r.lt)})</span>`:''}`;
+      out.push(`<button class="res" data-p="${b?b.page:''}"><div class="top"><span class="heb he">${esc(r.h)}</span><span class="tr">${esc(r.t)}</span><span class="pg">${b?T('pAbbr')+' '+b.page:''}</span></div><div>${gl} <span class="meta">· ${esc(r.s)} · ${esc(r.p)}</span></div><div class="df">${esc(r.d)}</div></button>`);
     }
-  } else if(q.trim() && !direct) out.push('<div class="sec">No matches</div>');
+  } else if(q.trim() && !direct) out.push(`<div class="sec">${T('noMatches')}</div>`);
   $('results').innerHTML=out.join('');
 }
 $('q').addEventListener('input',e=>render(e.target.value));
@@ -107,7 +120,7 @@ const VIEW={clean:false,strength:60,dark:false,loupe:false,eng:false};
 try{ Object.assign(VIEW,JSON.parse(localStorage.getItem('es-view')||'{}')) }catch(e){}
 const saveView=()=>{ try{ localStorage.setItem('es-view',JSON.stringify(VIEW)) }catch(e){} };
 const DPR=()=>window.devicePixelRatio||1;
-function setHeads(b){ $('heads').innerHTML = b?`${esc(b.first)} <span style="color:var(--mute)">…</span> ${esc(b.last)}`:''; }
+function setHeads(b){ $('heads').innerHTML = !b?'':b.title?`<span dir="ltr" style="font:600 14px system-ui">${esc(b.title)}</span>`:`${esc(b.first)} <span style="color:var(--mute)">…</span> ${esc(b.last)}`; }
 
 // --- pixel filter: grayscale, levels from this page's own histogram, gentle gamma; optional dark ---
 function filterInto(src, dst){
@@ -168,9 +181,10 @@ async function columnsFor(b){
 const colRange=(e,k)=>[e[2-k],e[3-k]];
 
 async function show(page, c=null){
-  page=Math.max(MINPAGE,Math.min(MAXPAGE,page));
-  const b=BYPAGE.get(page); cur=page; col=c; $('pg').value=page; setHeads(b);
-  try{ localStorage.setItem('es-page',page) }catch(e){}
+  if(page>0) page=Math.max(MINPAGE,Math.min(MAXPAGE,page));   // negative = front/back matter (contents.js)
+  const b=BYPAGE.get(page); cur=page; col=c; $('pg').value=page>0?page:''; setHeads(b);
+  if(window.onShowPage) onShowPage(page);
+  try{ if(page>0) localStorage.setItem('es-page',page) }catch(e){}
   updateColUI();
   if(!pdf||!b) return;
   const seq=++renderSeq;
@@ -194,7 +208,7 @@ async function show(page, c=null){
 
 // step over pages that are blank, section dividers or missing from the scan
 function nextPage(p,d){ p+=d; while(p>=MINPAGE&&p<=MAXPAGE&&!BYPAGE.has(p)) p+=d; return BYPAGE.has(p)?p:null; }
-function step(d){ const p=nextPage(cur,d); if(p) show(p, col==null?null:(d>0?0:2)); }
+function step(d){ if(cur<0&&window.stepExtra) return stepExtra(d); const p=nextPage(cur,d); if(p) show(p, col==null?null:(d>0?0:2)); }
 function stepCol(d){
   if(col==null) return;
   const k=col+d;
@@ -215,8 +229,8 @@ function updateColUI(){
   $('cols').classList.toggle('on',picking||col!=null);
   $('stage').classList.toggle('picking',picking);
   for(const id of ['colPrev','colNext','colInfo']) $(id).hidden=col==null;
-  if(col!=null) $('colInfo').textContent=`column ${col+1} of 3`;
-  $('cols').textContent=col!=null?'Whole page':picking?'Click a column…':'Column zoom';
+  if(col!=null) $('colInfo').textContent=T('colInfo',{k:col+1});
+  $('cols').textContent=col!=null?T('wholePage'):picking?T('colsPick'):T('cols');
 }
 function syncToggles(){
   $('clean').classList.toggle('on',VIEW.clean); $('dark').classList.toggle('on',VIEW.dark);
@@ -292,7 +306,7 @@ async function refTip(ev){
   if(seq!==tipSeq) return;
   if(!refs.length){ tip.hidden=true; return; }
   const f=refs[0];
-  tip.innerHTML=`<span class="he">${esc(f.heb)}</span>${esc(f.ref)}`;
+  tip.innerHTML=`<span class="he">${esc(f.heb)}</span>${esc(ESRefs.fullRef(f))}`;
   const big=!loupe.hidden?160:14;
   tip.style.left=Math.min(innerWidth-tip.offsetWidth-8, ev.clientX+big)+'px'; tip.style.top=(ev.clientY+big)+'px';
   tip.hidden=false;
@@ -324,16 +338,16 @@ let rz; window.addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout((
 // Plain browser: file picker; Chrome/Edge remember the file handle in IndexedDB.
 const TAURI = window.__TAURI__;
 const BTN = $('openBtn');
-function opened(){ BTN.textContent='Change PDF…'; BTN.classList.remove('primary'); COLS.clear(); hires=null; if(window.ESRefs) ESRefs.clear(); show(cur||MINPAGE); }
+function opened(){ BTN.textContent=T('change'); BTN.classList.remove('primary'); COLS.clear(); hires=null; if(window.ESRefs) ESRefs.clear(); show(cur||MINPAGE); }
 async function load(src, label){
-  BTN.textContent='Loading…';
+  BTN.textContent=T('loading');
   try{
     pdf=await pdfjsLib.getDocument(src).promise;
-    if(EXPECTED_PAGES && pdf.numPages!==EXPECTED_PAGES) alert(`This PDF has ${pdf.numPages} pages; the index was made for the ${EXPECTED_PAGES}-page scan. Pages may not line up.`);
+    if(EXPECTED_PAGES && pdf.numPages!==EXPECTED_PAGES) alert(T('pageCount',{n:pdf.numPages,m:EXPECTED_PAGES}));
     opened(); return true;
   }catch(e){
-    BTN.textContent='Open concordance PDF…'; BTN.classList.add('primary');
-    alert('Could not open '+(label||'the PDF')+': '+e.message); return false;
+    BTN.textContent=T('open'); BTN.classList.add('primary');
+    alert(T('cantOpen',{what:label||T('thePdf'),err:e.message})); return false;
   }
 }
 const openFile = file => file.arrayBuffer().then(data=>load({data},file.name));
@@ -366,14 +380,13 @@ $('file').onchange=e=>{const f=e.target.files[0]; if(f) openFile(f)};
   let start=MINPAGE; try{start=+localStorage.getItem('es-page')||MINPAGE}catch(e){}
   cur=start; $('pg').value=start; setHeads(BYPAGE.get(start));
   if(TAURI){
-    $('empty').querySelector('p').innerHTML='Click <b>Open concordance PDF…</b> and choose the Even-Shoshan scan (the 1,316-page file). The app remembers where it is, so you only do this once.';
     let path=null; try{path=localStorage.getItem('es-pdf-path')}catch(e){}
     if(path) openPath(path);
     return;
   }
   const h=await loadHandle();
   if(h&&h.queryPermission){
-    BTN.textContent='Reopen '+(h.name.length>24?h.name.slice(0,22)+'…':h.name);
+    BTN.textContent=T('reopen',{name:h.name.length>24?h.name.slice(0,22)+'…':h.name});
     BTN.onclick=async()=>{ try{ if(await h.requestPermission({mode:'read'})==='granted'){ BTN.onclick=pick; return openFile(await h.getFile()); } }catch(e){} $('file').click(); };
   }
 })();
