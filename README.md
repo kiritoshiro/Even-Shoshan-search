@@ -49,6 +49,8 @@ Buttons under the page toolbar (keyboard shortcut in brackets):
 - **Column zoom** (K): click one of the three columns and it fills the window. ← moves to the next column (right to left, then on to the next page) and → goes back. Esc returns to the whole page.
 - **Magnifier** (M), or hold **Shift**: a round lens under the cursor that uses the full-resolution scan (about 350 dpi).
 
+- **Reference tooltips**: hover over a reference such as `יהושע כב 20` and a tooltip shows `Joshua 22:20`. References are book + chapter in Hebrew letters + verse in digits, numbered as in the Hebrew Bible, which sometimes differs from English Bibles by a verse or a chapter. The tooltip reads the scan's hidden OCR text: book names are reliable, but chapter and verse are sometimes missing, and then only the book is shown.
+
 The settings are remembered.
 
 Press Enter to open the first result, use ← → for the previous and next page, and `/` to jump to the search box. There is an on-screen Hebrew keypad.

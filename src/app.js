@@ -174,7 +174,7 @@ async function show(page, c=null){
   const vp=p.getViewport({scale:s*DPR(),offsetX:-x0*s*DPR()});
   if(renderTask) try{renderTask.cancel()}catch(e){}
   raw.width=Math.round((x1-x0)*s*DPR()); raw.height=Math.round(vp.height);
-  view={page,col,x0,x1,s};
+  view={page,col,x0,x1,s,h:base.height};
   cv.hidden=false; $('empty').hidden=true; cv.classList.add('busy');
   renderTask=p.render({canvasContext:raw.getContext('2d'),viewport:vp});
   try{ await renderTask.promise; }catch(e){ return; }
@@ -268,7 +268,23 @@ function drawLoupe(ev){
     ensureHires().then(()=>{ if(lastMouse&&(VIEW.loupe||shiftDown)) drawLoupe(lastMouse); }).catch(()=>{});
   }
 }
-document.addEventListener('mousemove',e=>{ lastMouse=e; shiftDown=e.shiftKey; if(VIEW.loupe||e.shiftKey) drawLoupe(e); else if(!loupe.hidden) hideLoupe(); });
+document.addEventListener('mousemove',e=>{ lastMouse=e; shiftDown=e.shiftKey; if(VIEW.loupe||e.shiftKey) drawLoupe(e); else if(!loupe.hidden) hideLoupe(); refTip(e); });
+
+// --- Bible-reference tooltips (see refs.js) ---
+const tip=$('reftip'); let tipSeq=0;
+async function refTip(ev){
+  const seq=++tipSeq, cv=$('cv'), r=cv.getBoundingClientRect();
+  if(!pdf||!view||cv.hidden||!window.ESRefs||ev.clientX<r.left||ev.clientX>r.right||ev.clientY<r.top||ev.clientY>r.bottom){ tip.hidden=true; return; }
+  const x=view.x0+(ev.clientX-r.left)/r.width*(view.x1-view.x0), y=(ev.clientY-r.top)/r.height*view.h;
+  const refs=await ESRefs.refsAt(pdf, BYPAGE.get(view.page).idx, x, y);
+  if(seq!==tipSeq) return;
+  if(!refs.length){ tip.hidden=true; return; }
+  const f=refs[0];
+  tip.innerHTML=`<span class="he">${esc(f.heb)}</span>${esc(f.ref)}`;
+  const big=!loupe.hidden?160:14;
+  tip.style.left=Math.min(innerWidth-tip.offsetWidth-8, ev.clientX+big)+'px'; tip.style.top=(ev.clientY+big)+'px';
+  tip.hidden=false;
+}
 document.addEventListener('keyup',e=>{ if(e.key==='Shift'){ shiftDown=false; if(!VIEW.loupe) hideLoupe(); } });
 $('stage').addEventListener('scroll',()=>{ if(lastMouse&&!loupe.hidden) drawLoupe(lastMouse); });
 
@@ -295,7 +311,7 @@ let rz; window.addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout((
 // Plain browser: file picker; Chrome/Edge remember the file handle in IndexedDB.
 const TAURI = window.__TAURI__;
 const BTN = $('openBtn');
-function opened(){ BTN.textContent='Change PDF…'; BTN.classList.remove('primary'); COLS.clear(); hires=null; show(cur||MINPAGE); }
+function opened(){ BTN.textContent='Change PDF…'; BTN.classList.remove('primary'); COLS.clear(); hires=null; if(window.ESRefs) ESRefs.clear(); show(cur||MINPAGE); }
 async function load(src, label){
   BTN.textContent='Loading…';
   try{

@@ -53,6 +53,8 @@ aside{width:380px;max-width:100%;border-right:1px solid var(--line);background:v
 .mute{color:var(--mute)}
 #stage.picking #cv{cursor:zoom-in}
 #stage.looking #cv{cursor:none}
+#reftip{position:fixed;z-index:11;pointer-events:none;background:var(--ink);color:var(--panel);padding:5px 9px;border-radius:7px;font-size:13.5px;white-space:nowrap;box-shadow:0 4px 14px rgba(0,0,0,.3)}
+#reftip .he{opacity:.75;margin-right:6px}
 #loupe{position:fixed;width:300px;height:300px;border-radius:50%;pointer-events:none;z-index:10;box-shadow:0 0 0 3px var(--accent),0 6px 24px rgba(0,0,0,.35);background:#fff}
 .empty{max-width:520px;margin:40px auto;text-align:center;color:var(--mute)}
 .empty h2{color:var(--ink);font-size:18px}
@@ -103,6 +105,7 @@ footer a{color:inherit}
     </div>
     <div id="stage"><div class="empty" id="empty"><h2>Open your copy of the concordance</h2><p>Click <b>Open concordance PDF…</b> and choose the Even-Shoshan scan (the 1,316-page file). It stays on your computer; nothing is uploaded.</p><p>You can search before opening it: results show the page number.</p></div><canvas id="cv" hidden></canvas></div>
     <canvas id="loupe" width="300" height="300" hidden></canvas>
+    <div id="reftip" hidden></div>
   </section>
 </main>
 <footer>Page index made from the book's running heads. English glosses: <a href="https://github.com/STEPBible/STEPBible-Data" target="_blank" rel="noopener">STEPBible TBESH</a> (CC BY 4.0, Tyndale House Cambridge). Lookup lands on the page where the word's consonants fall alphabetically; check the neighbouring page if an entry starts mid-page.</footer>
@@ -110,6 +113,7 @@ footer a{color:inherit}
 <script src="vendor/pdf.min.js"></script>
 <script src="data/pages.js"></script>
 <script src="data/lexicon.js"></script>
+<script src="refs.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
