@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Even-Shoshan Finder</title>
+<style>
+:root{--bg:#f6f4ef;--panel:#fff;--ink:#1d1c1a;--mute:#6b675f;--line:#e2ddd2;--accent:#7a4b12;--accent-soft:#f3e7d6;--hit:#fff6dc}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#171614;--panel:#211f1c;--ink:#ece8df;--mute:#a19a8d;--line:#35322c;--accent:#e0a85c;--accent-soft:#3a2c1a;--hit:#3a3220}}
+:root[data-theme="dark"]{--bg:#171614;--panel:#211f1c;--ink:#ece8df;--mute:#a19a8d;--line:#35322c;--accent:#e0a85c;--accent-soft:#3a2c1a;--hit:#3a3220}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;flex-direction:column}
+.he{font-family:"SBL Hebrew","Ezra SIL","Taamey Frank CLM","David","Times New Roman",serif;direction:rtl;unicode-bidi:isolate}
+header{display:flex;gap:12px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+header h1{font-size:16px;margin:0;font-weight:650}
+header .sub{color:var(--mute);font-size:13px}
+header .sp{flex:1}
+button,input{font:inherit;color:inherit}
+button{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 10px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--panel);border-color:var(--accent)}
+main{flex:1;display:flex;min-height:0}
+aside{width:380px;max-width:100%;border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-height:0}
+.searchbox{padding:12px 16px;border-bottom:1px solid var(--line)}
+#q{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);font-size:17px}
+#q:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.hint{color:var(--mute);font-size:12.5px;margin-top:6px}
+.kbd{display:grid;grid-template-columns:repeat(11,1fr);gap:3px;margin-top:8px;direction:rtl}
+.kbd button{padding:4px 0;font-size:16px;border-radius:6px}
+#results{overflow:auto;flex:1;padding:6px 8px 16px}
+.res{display:block;width:100%;text-align:left;border:0;border-radius:8px;padding:8px 10px;background:none}
+.res:hover,.res.on{background:var(--accent-soft)}
+.res .top{display:flex;gap:8px;align-items:baseline}
+.res .heb{font-size:20px}
+.res .tr{color:var(--mute);font-style:italic}
+.res .pg{margin-left:auto;color:var(--accent);font-weight:600;white-space:nowrap}
+.res .gl{font-weight:600}
+.res .df{color:var(--mute);font-size:12.5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.res .meta{color:var(--mute);font-size:12px}
+.sec{color:var(--mute);font-size:12px;text-transform:uppercase;letter-spacing:.04em;padding:10px 10px 4px}
+.viewer{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
+.bar{display:flex;gap:8px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+.bar .heads{flex:1;text-align:center;font-size:18px;min-width:120px}
+.bar input{width:70px;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+#stage{flex:1;overflow:auto;display:flex;justify-content:center;align-items:flex-start;padding:12px}
+#cv{background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.18);max-width:none}
+.empty{max-width:520px;margin:40px auto;text-align:center;color:var(--mute)}
+.empty h2{color:var(--ink);font-size:18px}
+.busy{opacity:.55}
+footer{font-size:11.5px;color:var(--mute);padding:6px 16px;border-top:1px solid var(--line);background:var(--panel)}
+footer a{color:inherit}
+@media (max-width:800px){main{flex-direction:column}aside{width:100%;border-right:0;border-bottom:1px solid var(--line);max-height:46vh}header{padding:8px 16px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Even-Shoshan Finder</h1>
+  <span class="sub">Type a word in English, Hebrew, transliteration or Strong's to open its page in the concordance</span>
+  <span class="sp"></span>
+  <button id="openBtn" class="primary">Open concordance PDF…</button>
+  <input id="file" type="file" accept="application/pdf" hidden>
+</header>
+<main>
+  <aside>
+    <div class="searchbox">
+      <input id="q" type="search" placeholder="father · אב · av · H1 · p340" autocomplete="off" spellcheck="false">
+      <div class="hint">English gloss · Hebrew (vowels optional) · transliteration · Strong's (H1254) · page (p340)</div>
+      <div class="kbd" id="kbd"></div>
+    </div>
+    <div id="results"></div>
+  </aside>
+  <section class="viewer">
+    <div class="bar">
+      <button id="prev" title="Previous page (←)">◀</button>
+      <label>p. <input id="pg" type="number" min="1"></label>
+      <button id="next" title="Next page (→)">▶</button>
+      <div class="heads he" id="heads"></div>
+      <button id="zout" title="Zoom out">−</button>
+      <button id="zfit" title="Fit width">Fit</button>
+      <button id="zin" title="Zoom in">+</button>
+    </div>
+    <div id="stage"><div class="empty" id="empty"><h2>Open your copy of the concordance</h2><p>Click <b>Open concordance PDF…</b> and choose the Even-Shoshan scan (the 1,316-page file). It stays on your computer; nothing is uploaded.</p><p>You can search before opening it: results show the page number.</p></div><canvas id="cv" hidden></canvas></div>
+  </section>
+</main>
+<footer>Page index made from the book's running heads. English glosses: <a href="https://github.com/STEPBible/STEPBible-Data" target="_blank" rel="noopener">STEPBible TBESH</a> (CC BY 4.0, Tyndale House Cambridge). Lookup lands on the page where the word's consonants fall alphabetically; check the neighbouring page if an entry starts mid-page.</footer>
+
+<script src="vendor/pdf.min.js"></script>
+<script src="data/pages.js"></script>
+<script src="data/lexicon.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
