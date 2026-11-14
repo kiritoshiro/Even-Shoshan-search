@@ -45,6 +45,15 @@ aside{width:380px;max-width:100%;border-right:1px solid var(--line);background:v
 .bar input{width:70px;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
 #stage{flex:1;overflow:auto;display:flex;justify-content:center;align-items:flex-start;padding:12px}
 #cv{background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.18);max-width:none}
+.bar.tools{padding:6px 12px;gap:6px;font-size:13.5px}
+.bar.tools button{padding:4px 9px}
+.bar.tools .sep{width:1px;height:20px;background:var(--line);margin:0 4px}
+.bar.tools input[type=range]{width:90px;padding:0;border:0;background:none;accent-color:var(--accent)}
+.tog.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:600}
+.mute{color:var(--mute)}
+#stage.picking #cv{cursor:zoom-in}
+#stage.looking #cv{cursor:none}
+#loupe{position:fixed;width:300px;height:300px;border-radius:50%;pointer-events:none;z-index:10;box-shadow:0 0 0 3px var(--accent),0 6px 24px rgba(0,0,0,.35);background:#fff}
 .empty{max-width:520px;margin:40px auto;text-align:center;color:var(--mute)}
 .empty h2{color:var(--ink);font-size:18px}
 .busy{opacity:.55}
@@ -80,7 +89,20 @@ footer a{color:inherit}
       <button id="zfit" title="Fit width">Fit</button>
       <button id="zin" title="Zoom in">+</button>
     </div>
+    <div class="bar tools">
+      <button id="clean" class="tog" title="Clean paper: grey scan becomes white paper and dark ink (C)">Clean paper</button>
+      <input id="strength" type="range" min="0" max="100" value="60" title="Clean-up strength">
+      <button id="dark" class="tog" title="Light text on dark background (D)">Dark</button>
+      <span class="sep"></span>
+      <button id="cols" class="tog" title="Column zoom: click a column to read it at full width (K)">Column zoom</button>
+      <button id="colPrev" title="Previous column" hidden>‹ col</button>
+      <span id="colInfo" class="mute" hidden></span>
+      <button id="colNext" title="Next column" hidden>col ›</button>
+      <span class="sep"></span>
+      <button id="loupeBtn" class="tog" title="Magnifier: hold Shift over the page, or switch on here (M)">Magnifier</button>
+    </div>
     <div id="stage"><div class="empty" id="empty"><h2>Open your copy of the concordance</h2><p>Click <b>Open concordance PDF…</b> and choose the Even-Shoshan scan (the 1,316-page file). It stays on your computer; nothing is uploaded.</p><p>You can search before opening it: results show the page number.</p></div><canvas id="cv" hidden></canvas></div>
+    <canvas id="loupe" width="300" height="300" hidden></canvas>
   </section>
 </main>
 <footer>Page index made from the book's running heads. English glosses: <a href="https://github.com/STEPBible/STEPBible-Data" target="_blank" rel="noopener">STEPBible TBESH</a> (CC BY 4.0, Tyndale House Cambridge). Lookup lands on the page where the word's consonants fall alphabetically; check the neighbouring page if an entry starts mid-page.</footer>

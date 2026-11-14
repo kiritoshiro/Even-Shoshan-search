@@ -40,6 +40,17 @@ The bookmarked copy has the same pages in the same order, so the app works with 
 | Strong's number | `H1254` | That entry |
 | Printed page | `p340` | Opens page 340 |
 
+## Reading tools
+
+Buttons under the page toolbar (keyboard shortcut in brackets):
+
+- **Clean paper** (C): turns the yellow-grey scan into white paper and dark ink. The slider sets the strength. The scan is never forced to pure black and white, so vowel points and dagesh stay intact.
+- **Dark** (D): light text on a dark background.
+- **Column zoom** (K): click one of the three columns and it fills the window. ← moves to the next column (right to left, then on to the next page) and → goes back. Esc returns to the whole page.
+- **Magnifier** (M), or hold **Shift**: a round lens under the cursor that uses the full-resolution scan (about 350 dpi).
+
+The settings are remembered.
+
 Press Enter to open the first result, use ← → for the previous and next page, and `/` to jump to the search box. There is an on-screen Hebrew keypad.
 
 ## How it works
