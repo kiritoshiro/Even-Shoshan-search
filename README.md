@@ -58,7 +58,7 @@ The page you are reading stays highlighted.
 | English gloss | `seed`, `to create` | Lexicon matches with Hebrew, transliteration and page |
 | Hebrew (vowels optional) | `זרע`, `שָׁלוֹם` | Page where that spelling falls alphabetically, plus lexicon matches |
 | Hebrew word as written in a verse | `ויזרח`, `בְּרֵאשִׁית`, `לו` | **In the Bible:** the dictionary entries this form belongs to, how often it occurs, and their pages (`ויזרח` → `זָרַח`, p. 339). Vowel points you type narrow the forms; points you leave out don't matter |
-| Verse | `Gen 1:1`, `Pr 1, 1`, `1 Sam 3:4`, `Psalm 23`, `בראשית א 1`, `ש״ב כג 4` | The verse in Hebrew, then each word with its dictionary form, gloss and concordance page. ‹ › step to the previous and next verse. Two optional switches under the verse: **Word by word** and **Translations** (below) |
+| Verse | `Gen 1:1`, `Pr 1, 1`, `2 Met 3, 14`, `Psalm 23`, `בראשית א 1`, `ש״ב כג 4` | The verse in Hebrew, the concordance pages that quote it, then each word with its dictionary form, gloss and the page of **this verse's line** in that word's entry (below). ‹ › step to the previous and next verse. Two optional switches under the verse: **Word by word** and **Translations** (below) |
 | Transliteration | `bara`, `shalom` | Lexicon matches |
 | Strong's number | `H1254` | That entry |
 | Printed page | `p340` | Opens page 340 |
@@ -81,6 +81,16 @@ The settings are remembered.
 Press Enter to open the first result, use ← → for the previous and next page, and `/` to jump to the search box. There is an on-screen Hebrew keypad with vowel points (shown on a sample letter; only the point is typed).
 
 Verse numbers follow the Hebrew Bible, as the concordance and the Lithuanian RK translation do. English Bibles sometimes differ by a verse or a chapter (for example English Genesis 32:31 is Hebrew 32:32). Book names are accepted in English (`Gen`, `Genesis`), Lithuanian RK style (`Pr`, `Pradžios`) and Hebrew (`בראשית`). Ambiguous abbreviations such as `Pr` follow the interface language.
+
+## Verse view: the verse in the concordance
+
+With the PDF open, a verse search looks for the verse in the entry of each of its words, so a click opens the line that quotes this verse, not just the page where the word's entry begins. The pages are listed under the verse (**Pages quoting this verse**), and each word shows its own page:
+
+- **✓ p. 923**: the line was found. A click opens that column with the line highlighted.
+- **≈ p. 923**: the line's reference could not be read, so the app highlights (more faintly) where the verse falls in biblical order within the word's list. Check the lines around it.
+- **p. 918–925**: the line was not found; these are the pages of the word's entry. A click opens the first.
+
+How it works: Even-Shoshan lists each form of a word separately (`ויעש`, `ויעשו`, `עשה` …), in biblical order. Busy forms end with compact lists such as `דה"ב ג 7, 8, 10, 14`. The app reads the scan's hidden OCR text in each column of the entry's pages and carries the book and chapter through compact lists. A line counts as found when its book, chapter and verse are all read. When the reference is garbled (the OCR often misreads chapter letters), the app looks for the two readable references on either side of the verse in the list that shows the word's form. It highlights only where the evidence points to that word's own list. On 15 test verses, 73 of 228 words were found exactly, 72 placed approximately and 83 not found. Spot checks found the exact hits correct. The approximate ones were usually on the right list, sometimes a line or two off. Each word takes about 0.1 s on average (larger entries take longer).
 
 ## Verse view: word by word and translations
 
