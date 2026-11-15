@@ -58,7 +58,7 @@ The page you are reading stays highlighted.
 | English gloss | `seed`, `to create` | Lexicon matches with Hebrew, transliteration and page |
 | Hebrew (vowels optional) | `זרע`, `שָׁלוֹם` | Page where that spelling falls alphabetically, plus lexicon matches |
 | Hebrew word as written in a verse | `ויזרח`, `בְּרֵאשִׁית`, `לו` | **In the Bible:** the dictionary entries this form belongs to, how often it occurs, and their pages (`ויזרח` → `זָרַח`, p. 339). Vowel points you type narrow the forms; points you leave out don't matter |
-| Verse | `Gen 1:1`, `Pr 1, 1`, `1 Sam 3:4`, `Psalm 23`, `בראשית א 1`, `ש״ב כג 4` | The verse in Hebrew, then each word with its dictionary form, gloss and concordance page. ‹ › step to the previous and next verse |
+| Verse | `Gen 1:1`, `Pr 1, 1`, `1 Sam 3:4`, `Psalm 23`, `בראשית א 1`, `ש״ב כג 4` | The verse in Hebrew, then each word with its dictionary form, gloss and concordance page. ‹ › step to the previous and next verse. Two optional switches under the verse: **Word by word** and **Translations** (below) |
 | Transliteration | `bara`, `shalom` | Lexicon matches |
 | Strong's number | `H1254` | That entry |
 | Printed page | `p340` | Opens page 340 |
@@ -82,6 +82,15 @@ Press Enter to open the first result, use ← → for the previous and next page
 
 Verse numbers follow the Hebrew Bible, as the concordance and the Lithuanian RK translation do. English Bibles sometimes differ by a verse or a chapter (for example English Genesis 32:31 is Hebrew 32:32). Book names are accepted in English (`Gen`, `Genesis`), Lithuanian RK style (`Pr`, `Pradžios`) and Hebrew (`בראשית`). Ambiguous abbreviations such as `Pr` follow the interface language.
 
+## Verse view: word by word and translations
+
+Under a verse there are two switches. They are off until you turn them on, and the app remembers them.
+
+- **Word by word** shows each Hebrew word with its literal English translation and its grammar, e.g. `הָיְתָה` *<it> was* · verb Qal perfect 3rd fem. sing. Hover the grammar for the full names. In Lithuanian mode the grammar is in Lithuanian and the Lithuanian dictionary meaning is added under the English. The literal translation is from STEPBible TAHOT (English only); the grammar is from the Open Scriptures Hebrew Bible.
+- **Translations** shows the verse in Bibles you add yourself: click **Add a Bible (MyBible .SQLite3)…** and choose MyBible Bible modules, e.g. Lithuanian translations. They are read on your computer and kept in the app; nothing is uploaded, and no translation text ships with the app. Tick or untick each one, or remove it with ✕.
+  - Translations number some verses as English Bibles do (Gen 31:55, Mal 4, psalm titles without a number), and many mix the two numberings book by book. For each chapter where the numberings differ, the app picks the one whose chapter lengths match the translation, and shows the translation's own number next to its name when it differs (`· 31, 55`).
+  - A verse that the translation joins to its neighbour, or a psalm title it does not number, shows *(no text for this verse)*.
+
 ## How it works
 
 - `data/page-index.tsv` lists every PDF page with its printed page number and its two running heads (first and last entry on the page). A Hebrew lookup finds the first page whose last head sorts at or after the word. Consonants only, final letters treated as regular, multi-word names compared word by word, as the book does.
@@ -90,6 +99,7 @@ Verse numbers follow the Hebrew Bible, as the concordance and the Lithuanian RK 
 - Scan quirks: printed page 506 is missing from the scan and page 508 is duplicated. Blank and section-divider pages are skipped.
 - English glosses come from the [STEPBible TBESH lexicon](https://github.com/STEPBible/STEPBible-Data) (Tyndale House Cambridge, CC BY 4.0).
 - Verse text and the dictionary form of every word come from the [Open Scriptures Hebrew Bible](https://github.com/openscriptures/morphhb): the Westminster Leningrad Codex with lemmas (Strong's numbers). `src/data/bible.js` holds every verse with vowel points (no cantillation) and each word's Strong's number. Where the written text (ketiv) has a marginal reading (qere), the qere is shown. A word's page is found from its dictionary form, so it is subject to the same alphabetical lookup as everything else.
+- Word by word: `src/data/bible-gloss.js` is the English column of [STEPBible TAHOT](https://github.com/STEPBible/STEPBible-Data) (CC BY 4.0), lined up with the OSHB words by their consonants (99.96% of words). `src/data/bible-morph.js` is the OSHB grammar code of every word, put into words by `src/morph.js`. Both files load only when Word by word is first switched on. `src/data/versemap.js` (from TAHOT) lists where English verse numbers differ from the Hebrew; it is used to line up translations. MyBible modules are read with [sql.js](https://github.com/sql-js/sql.js) (`src/vendor/sql-wasm.*`).
 
 ## Development
 
@@ -99,7 +109,7 @@ The app is plain HTML/JS in `src/`, wrapped with [Tauri 2](https://tauri.app).
 npm install
 npm run dev      # run the desktop app
 npm run build    # build installers for the current OS
-npm run data     # regenerate src/data/*.js from data/page-index.tsv, TBESH and OSHB (downloaded into data/ if missing)
+npm run data     # regenerate src/data/*.js from data/page-index.tsv, TBESH, TAHOT and OSHB (downloaded into data/ if missing)
 ```
 
 `src/index.html` also works in a browser served over http (for example `python -m http.server -d src`).
@@ -108,4 +118,4 @@ To make a release, bump the version in `src-tauri/tauri.conf.json`, then push a 
 
 ## Licenses
 
-Code: MIT. pdf.js: Apache-2.0 (`src/vendor/pdfjs-LICENSE`). Lexicon data: CC BY 4.0, STEPBible.org / Tyndale House. Bible text: Westminster Leningrad Codex (public domain); lemmas: Open Scriptures Hebrew Bible, CC BY 4.0.
+Code: MIT. pdf.js: Apache-2.0 (`src/vendor/pdfjs-LICENSE`). sql.js: MIT (`src/vendor/sqljs-LICENSE`). Lexicon and word-by-word translation: CC BY 4.0, STEPBible.org / Tyndale House (TBESH, TAHOT). Bible text: Westminster Leningrad Codex (public domain); lemmas and grammar: Open Scriptures Hebrew Bible, CC BY 4.0.

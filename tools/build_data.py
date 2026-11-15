@@ -2,7 +2,8 @@
 and the Open Scriptures Hebrew Bible.
 
 Usage:  python tools/build_data.py
-Downloads TBESH (CC BY 4.0, Tyndale House) and OSHB (WLC text, CC BY 4.0 lemmas) into data/ if missing.
+Downloads TBESH and TAHOT (CC BY 4.0, Tyndale House / STEPBible) and OSHB (WLC text, CC BY 4.0 lemmas and
+morphology) into data/ if missing.
 """
 import json, re, sys, urllib.request
 from pathlib import Path
@@ -101,16 +102,17 @@ def bible():
         if not path.exists():
             print(f"downloading {osis}.xml ...")
             urllib.request.urlretrieve(OSHB_URL.format(osis), path)
-        chapters = []
+        chapters, morphs = [], []
         for v in ET.parse(path).getroot().iter(ns + "verse"):
             _, ch, vs = v.get("osisID").split(".")
             ch, vs = int(ch), int(vs)
             while len(chapters) < ch:
                 chapters.append([])
+                morphs.append([])
             words = []
 
             def add(w):
-                words.append([drop.sub("", w.text or ""), lemma_id(w.get("lemma"))])
+                words.append([drop.sub("", w.text or ""), lemma_id(w.get("lemma")), w.get("morph") or "-"])
 
             for el in v:
                 tag = el.tag.replace(ns, "")
@@ -121,11 +123,79 @@ def bible():
                 elif tag == "note" and el.get("type") == "variant":
                     for w in el.iter(ns + "w"):
                         add(w)
+            words = [w for w in words if w[0]]
             while len(chapters[ch - 1]) < vs:
                 chapters[ch - 1].append("")
-            chapters[ch - 1][vs - 1] = " ".join(f"{t} {i}" for t, i in words if t)
+                morphs[ch - 1].append("")
+            chapters[ch - 1][vs - 1] = " ".join(f"{t} {i}" for t, i, _ in words)
+            morphs[ch - 1][vs - 1] = " ".join(m for _, _, m in words)
         out[name] = chapters
+        MORPH[name] = morphs
     return out
+
+
+MORPH = {}   # filled by bible(): OSHB morphology code of every word, in the same order as bible.js
+TAHOT = DATA / "tahot"
+TAHOT_URL = ("https://raw.githubusercontent.com/STEPBible/STEPBible-Data/master/Translators%20Amalgamated%20OT%2BNT/"
+             "TAHOT%20{}%20-%20Translators%20Amalgamated%20Hebrew%20OT%20-%20STEPBible.org%20CC%20BY.txt")
+TAHOT_PARTS = ["Gen-Deu", "Jos-Est", "Job-Sng", "Isa-Mal"]
+TAHOT_BOOKS = ["Gen", "Exo", "Lev", "Num", "Deu", "Jos", "Jdg", "Rut", "1Sa", "2Sa", "1Ki", "2Ki", "1Ch", "2Ch", "Ezr",
+               "Neh", "Est", "Job", "Psa", "Pro", "Ecc", "Sng", "Isa", "Jer", "Lam", "Ezk", "Dan", "Hos", "Jol", "Amo",
+               "Oba", "Jon", "Mic", "Nam", "Hab", "Zep", "Hag", "Zec", "Mal"]
+
+
+def ckey(s):
+    return re.sub("[^א-ת]", "", s).translate(str.maketrans("ךםןףץ", "כמנפצ"))
+
+
+def tahot(text):
+    """Word-by-word English translation from STEPBible TAHOT (CC BY 4.0), lined up with the words of bible.js,
+    and the English (KJV-style) number of every Hebrew verse that is numbered differently.
+    Returns (gloss {book: [chapters[verses "gloss|gloss|..."]]}, v2e {book: {"ch:vs": "ch:vs[,ch:vs]"}})."""
+    TAHOT.mkdir(parents=True, exist_ok=True)
+    names = dict(zip(TAHOT_BOOKS, (n for _, n in OSIS)))
+    ref = re.compile(r"^(\w+)\.(\d+)\.(\d+)(?:\((\d+)\.(\d+)\))?#\d+=([A-Z]*)")
+    verses, v2e = {}, {}
+    for part in TAHOT_PARTS:
+        path = TAHOT / f"TAHOT {part} - Translators Amalgamated Hebrew OT - STEPBible.org CC BY.txt"
+        if not path.exists():
+            print(f"downloading TAHOT {part} ...")
+            urllib.request.urlretrieve(TAHOT_URL.format(part), path)
+        for line in path.read_text(encoding="utf-8").splitlines():
+            m = ref.match(line)
+            if not m or not m.group(6)[:1] in ("L", "Q"):
+                continue
+            book = names[m.group(1)]
+            ech, evs = int(m.group(2)), int(m.group(3))
+            hch, hvs = (int(m.group(4)), int(m.group(5))) if m.group(4) else (ech, evs)
+            f = line.split("	")
+            gloss = re.sub(r"/\s*", " ", f[3]).replace("|", "/").strip()
+            verses.setdefault((book, hch, hvs), []).append((ckey(f[1]), gloss))
+            if (ech, evs) != (hch, hvs):
+                eng = v2e.setdefault(book, {}).setdefault(f"{hch}:{hvs}", [])
+                if f"{ech}:{evs}" not in eng:
+                    eng.append(f"{ech}:{evs}")
+    gloss, missed, total = {}, 0, 0
+    for book, chapters in text.items():
+        gloss[book] = []
+        for c, vv in enumerate(chapters, 1):
+            gloss[book].append([])
+            for v, line in enumerate(vv, 1):
+                ws = [ckey(w) for w in line.split(" ")[0::2]] if line else []
+                tw = verses.get((book, c, v), [])
+                out, j = [], 0
+                for k in ws:   # walk both lists; skip TAHOT words that do not line up
+                    hit = next((i for i in range(j, min(j + 4, len(tw))) if tw[i][0] == k), None)
+                    if hit is None and j < len(tw) and len(ws) == len(tw):
+                        hit = j
+                    if hit is None:
+                        out.append(""); missed += 1
+                    else:
+                        out.append(tw[hit][1]); j = hit + 1
+                total += len(ws)
+                gloss[book][-1].append("|".join(out))
+    print(f"TAHOT glosses: {total - missed} of {total} words lined up")
+    return gloss, {b: {h: ",".join(e) for h, e in m.items()} for b, m in v2e.items()}
 
 
 def write(name, var, value):
@@ -141,4 +211,9 @@ if __name__ == "__main__":
     write("pages.js", "ES_PAGES", pages())
     write("lexicon.js", "ES_LEX", lexicon())
     write("lexicon-lt.js", "ES_LEX_LT", glosses_lt())
-    write("bible.js", "ES_BIBLE", bible())
+    text = bible()
+    write("bible.js", "ES_BIBLE", text)
+    write("bible-morph.js", "ES_MORPH", MORPH)
+    gloss, v2e = tahot(text)
+    write("bible-gloss.js", "ES_GLOSS", gloss)
+    write("versemap.js", "ES_V2E", v2e)

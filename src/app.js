@@ -95,15 +95,54 @@ function wordRow(form, r, extra){
   return `<button class="res" data-p="${b?b.page:''}"><div class="top"><span class="heb he">${esc(form)}</span><span class="meta">→</span><span class="he lem">${esc(lemmaOf(r))}</span><span class="tr">${esc(r.t)}</span><span class="pg">${b?T('pAbbr')+' '+b.page:''}</span></div><div>${glossHtml(r)} <span class="meta">· ${esc(r.s)}${extra?' · '+extra:''}</span></div></button>`;
 }
 let verseRef=null;
+// verse view options: interlinear (literal English + grammar under each word) and the user's own Bible translations
+const VOPT={il:false, tr:false}; try{ Object.assign(VOPT,JSON.parse(localStorage.getItem('es-vopt')||'{}')); }catch(e){}
+const saveVopt=()=>{ try{ localStorage.setItem('es-vopt',JSON.stringify(VOPT)); }catch(e){} };
+const rerender=()=>{ if(verseRef) render($('q').value); };
+function interlinearHtml(ref){
+  const ws=ESVerse.interlinear(ref);
+  if(!ws){ ESVerse.loadExtra().then(rerender,()=>{}); return `<div class="meta il-wait">${T('loading')}</div>`; }
+  return `<div class="il he" dir="rtl">${ws.map(x=>{
+    const m=ESMorph.describe(x.morph), r=lexById(x.id);
+    const lt=LANG==='lt'&&r&&r.lt?`<div class="iwl">${esc(r.lt)}</div>`:'';
+    return `<div class="iw"><div class="iwh">${esc(x.w)}</div><div class="iwg" dir="ltr">${esc(x.gloss||'–')}</div>${lt}<div class="iwm" dir="ltr" title="${esc(m.long)}">${esc(m.short)}</div></div>`;
+  }).join('')}</div>`;
+}
+function translationsHtml(ref){
+  const out=[], list=ESTrans.list();
+  for(const t of ESTrans.verse(ref)){
+    const own=t.ref?' · '+t.ref.split(',').map(x=>LANG==='lt'?x.replace(':',', '):x).join('; '):'';
+    out.push(`<div class="trv"><div class="trn">${esc(t.title)}${esc(own)}</div><div>${t.text?esc(t.text):`<span class="meta">${T('trNoText')}</span>`}</div></div>`);
+  }
+  out.push(`<div class="trlist">${list.map(t=>`<label class="trrow" title="${esc(t.file)}"><input type="checkbox" data-tr="${esc(t.id)}"${t.on?' checked':''}> ${esc(t.title)} <button class="trdel" data-del="${esc(t.id)}" title="${T('trRemove')}">✕</button></label>`).join('')}
+    <button class="tradd" type="button">${T('trAdd')}</button>${list.length?'':`<div class="meta">${T('trHint')}</div>`}</div>`);
+  return out.join('');
+}
 function renderVerse(ref){
   const ws=ESVerse.words(ref); verseRef=ws?ref:null;
   if(!ws) return `<div class="sec">${T('noVerse',{ref:esc(ESVerse.label(ref))})}</div>`;
   const out=[`<div class="sec vhead"><button class="vstep" data-d="-1" title="${T('prevVerse')}">‹</button><span>${esc(ESVerse.label(ref))}</span><button class="vstep" data-d="1" title="${T('nextVerse')}">›</button></div>`,
     `<div class="verse he" dir="rtl">${ws.map(x=>esc(x.w)).join(' ').replace(/־ /g,'־')}</div>`,
-    `<div class="sec">${T('verseWords')}</div>`];
+    `<div class="vopts"><label title="${T('optIlTip')}"><input type="checkbox" data-opt="il"${VOPT.il?' checked':''}> ${T('optIl')}</label><label><input type="checkbox" data-opt="tr"${VOPT.tr?' checked':''}> ${T('optTr')}</label></div>`];
+  if(VOPT.il) out.push(interlinearHtml(ref));
+  if(VOPT.tr) out.push(translationsHtml(ref));
+  out.push(`<div class="sec">${T('verseWords')}</div>`);
   for(const x of ws){ const r=lexById(x.id); if(r) out.push(wordRow(x.w.replace(/־$/,''),r)); }
   return out.join('');
 }
+ESTrans.onChange(rerender); ESTrans.ready.then(rerender);
+$('trFile').onchange=async e=>{
+  const files=[...e.target.files]; e.target.value=''; if(!files.length) return;
+  const b=document.querySelector('.tradd'); if(b){ b.disabled=true; b.textContent=T('loading'); }
+  const errs=await ESTrans.addFiles(files);
+  if(errs.length) alert(T('trError')+'\n'+errs.join('\n'));
+  rerender();
+};
+$('results').addEventListener('change',e=>{
+  const o=e.target.dataset.opt, t=e.target.dataset.tr;
+  if(o){ VOPT[o]=e.target.checked; saveVopt(); rerender(); }
+  else if(t) ESTrans.toggle(t,e.target.checked);
+});
 function render(q){
   const {lex,direct,verse,forms}=search(q), out=[];
   if(verse){ $('results').innerHTML=renderVerse(verse); return; }
@@ -130,6 +169,9 @@ function render(q){
 $('q').addEventListener('input',e=>render(e.target.value));
 $('q').addEventListener('keydown',e=>{ if(e.key==='Enter'){const f=$('results').querySelector('.res[data-p]:not([data-p=""])'); if(f) f.click();} });
 $('results').addEventListener('click',e=>{
+  if(e.target.closest('.tradd')){ $('trFile').click(); return; }
+  const del=e.target.closest('.trdel');
+  if(del){ e.preventDefault(); if(confirm(T('trRemoveAsk'))) ESTrans.remove(del.dataset.del); return; }
   const s=e.target.closest('.vstep');
   if(s){ const r=verseRef&&ESVerse.step(verseRef,+s.dataset.d); if(r){ const q=$('q'); q.value=ESVerse.label(r); render(q.value); } return; }
   const b=e.target.closest('.res'); if(!b||!b.dataset.p) return;

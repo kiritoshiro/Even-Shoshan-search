@@ -117,5 +117,21 @@ function forms(q){
   return strict.length?strict:collect(false);
 }
 
-window.ESVerse={parse, words, label, step, forms};
+// ---------- interlinear ----------
+// data/bible-gloss.js (STEPBible TAHOT word-by-word English) and data/bible-morph.js (OSHB grammar codes)
+// list the words of each verse in the same order as data/bible.js. Loaded only when first needed.
+const script=src=>new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=()=>rej(new Error(src)); document.head.appendChild(s); });
+const once={};
+const need=(...srcs)=>Promise.all(srcs.map(s=>once[s]||(once[s]=script(s))));
+const extraReady=()=>!!(window.ES_GLOSS&&window.ES_MORPH);
+const loadExtra=()=>need('data/bible-gloss.js','data/bible-morph.js');
+// [{w, id, gloss, morph}] for a verse, or null
+function interlinear(r){
+  const ws=words(r); if(!ws||!extraReady()) return null;
+  const at=(o)=>((o[r.book]||[])[r.ch-1]||[])[r.vs-1]||'';
+  const g=at(ES_GLOSS).split('|'), m=at(ES_MORPH).split(' ');
+  return ws.map((x,i)=>({...x, gloss:g[i]||'', morph:m[i]||''}));
+}
+
+window.ESVerse={parse, words, label, step, forms, interlinear, loadExtra, extraReady, need};
 })();
