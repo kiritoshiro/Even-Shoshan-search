@@ -102,7 +102,7 @@ const ABBR={'Genesis':'Gen','Exodus':'Exod','Leviticus':'Lev','Numbers':'Num','D
 // chapters per book in the Hebrew Bible, to reject impossible OCR readings
 const CHAPTERS={'Genesis':50,'Exodus':40,'Leviticus':27,'Numbers':36,'Deuteronomy':34,'Joshua':24,'Judges':21,'1 Samuel':31,
   '2 Samuel':24,'1 Kings':22,'2 Kings':25,'Isaiah':66,'Jeremiah':52,'Ezekiel':48,'Hosea':14,'Joel':4,'Amos':9,'Obadiah':1,
-  'Jonah':2,'Micah':7,'Nahum':3,'Habakkuk':3,'Zephaniah':3,'Haggai':2,'Zechariah':14,'Malachi':3,'Psalms':150,'Proverbs':31,
+  'Jonah':4,'Micah':7,'Nahum':3,'Habakkuk':3,'Zephaniah':3,'Haggai':2,'Zechariah':14,'Malachi':3,'Psalms':150,'Proverbs':31,
   'Job':42,'Song of Songs':8,'Ruth':4,'Lamentations':5,'Ecclesiastes':12,'Esther':10,'Daniel':12,'Ezra':10,'Nehemiah':13,
   '1 Chronicles':29,'2 Chronicles':36};
 const overlays=new Map();
@@ -174,14 +174,19 @@ function drawOverlay(canvas, refs, x0, scale, dark, zones){
 // compact lists ("book chapter verse, verse; chapter verse ... + next book"). The OCR often garbles the
 // chapter letters, so a line may give only its book. Columns are found from the text itself.
 const raws=new Map();   // pdf page index -> [{x0,x1,y,str}] including digits-only items, page width
+// raws and lineCache belong to one document: another PDF starts them afresh, and a read that
+// finishes after the PDF was changed is not stored
+let rawDoc=null;
+const sameDoc=doc=>{ if(doc!==rawDoc){ rawDoc=doc; raws.clear(); lineCache.clear(); } };
 async function rawItems(doc, idx){
+  sameDoc(doc);
   if(raws.has(idx)) return raws.get(idx);
   const p=await doc.getPage(idx+1), vp=p.getViewport({scale:1}), tc=await p.getTextContent();
   const list=tc.items.filter(i=>i.str&&i.str.trim()).map(i=>{
     const [x,y]=vp.convertToViewportPoint(i.transform[4],i.transform[5]);
     return i.dir==='rtl'?{x0:x-i.width,x1:x,y,str:i.str}:{x0:x,x1:x+i.width,y,str:i.str};
   });
-  const out={list,W:vp.width,H:vp.height}; raws.set(idx,out); return out;
+  const out={list,W:vp.width,H:vp.height}; if(doc===rawDoc) raws.set(idx,out); return out;
 }
 // OCR spellings of the abbreviated names: דה * ב, דה - ב, ש - א, שמואל - א, מלכים - ב ...
 const normBooks=s=>s.replace(/דה\s*["*\-]\s*([אב])/g,'דה"$1 ').replace(/(^|\s)([שמ])\s*["*\-]\s*([אב])(?![א-ת])/g,'$1$2"$3 ')
@@ -224,6 +229,7 @@ function scanLine(str, st){
 const lineCache=new Map(), ORDER=new Map(BOOKS.map(([,en],i)=>[en,i]));
 // [{col, y, q (a numbered quotation line), words, refs}] of a page in reading order: right column first, top to bottom
 async function lineRefs(doc, idx){
+  sameDoc(doc);
   if(lineCache.has(idx)) return lineCache.get(idx);
   const {list,W}=await rawItems(doc,idx);
   // columns: the two emptiest vertical strips in the middle thirds of the page
@@ -247,7 +253,7 @@ async function lineRefs(doc, idx){
       out.push({col:c, y:ln.y, q:/^\d/.test(str.trim()), words:str.split(/\s+/).map(ckey).filter(Boolean), refs});
     }
   }
-  lineCache.set(idx,out); return out;
+  if(doc===rawDoc) lineCache.set(idx,out); return out;
 }
 window.ESRefs={books:BOOKS, lt:LT, hebNum, fullRef,refsAt, pageRefs, drawOverlay, parse, logical, lineRefs, ckey,
   clear:()=>{cache.clear();overlays.clear();raws.clear();lineCache.clear();}};

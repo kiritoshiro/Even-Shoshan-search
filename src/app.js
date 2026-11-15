@@ -110,19 +110,46 @@ const FOUND=new Map();   // lemma|form|verse -> result
 // Even-Shoshan lists each form of a word (ויעש, ויעשו, עשה ...) separately, in biblical order, with
 // quotation lines first and, for busy forms, compact reference lists after them.
 async function findInEntry(word, ref){
-  const r=lexById(word.id); if(!r||!pdf||!window.ESRefs) return null;
+  const r=lexById(word.id), doc=pdf; if(!r||!doc||!window.ESRefs) return null;
   const id=r.s+'|'+word.w+'|'+ref.book+' '+ref.ch+':'+ref.vs; if(FOUND.has(id)) return FOUND.get(id);
   const pages=entryPages(lemmaOf(r)); if(!pages.length) return null;
   const form=ESRefs.ckey(word.w), lines=[];
-  for(const p of pages) for(const ln of await ESRefs.lineRefs(pdf,p.idx)) lines.push({...ln,page:p.page});
+  for(const p of pages){
+    const ls=await ESRefs.lineRefs(doc,p.idx);
+    if(doc!==pdf) return null;                 // another PDF was opened meanwhile
+    for(const ln of ls) lines.push({...ln,page:p.page});
+  }
   const span=[pages[0].page,pages[pages.length-1].page];
-  // the word's own form on this line or in the quotation lines just before it (the start of its list)
-  const near=li=>{ for(let j=li;j>=Math.max(0,li-25);j--) if(lines[j].words.includes(form)) return li-j; return 99; };
+  // the word's own form on this line or on the lines before it in the same list; a list ends where
+  // biblical order starts again (a reference several books later than the ones after it).
+  const pos=ln=>ln.refs.filter(x=>x.ch&&x.vs&&BOOKPOS.has(x.book)).map(x=>vpos(x.book,x.ch,x.vs));
+  // A form's quotation lines are followed by a compact list of its other references, which starts again
+  // from Genesis; so a restart into a compact list is the same form, a restart into a quotation line is not.
+  const near=li=>{
+    let low=Infinity, lowQ=true;
+    for(let j=li;j>=Math.max(0,li-25);j--){
+      const ps=pos(lines[j]);
+      if(j<li&&ps.length&&Math.max(...ps)>low+3e6){       // jumps back over 3+ books: a garbled reference does not
+        if(lowQ) break;
+        low=Infinity;
+      }
+      if(lines[j].words.includes(form)) return li-j;
+      if(ps.length&&Math.min(...ps)<low){ low=Math.min(...ps); lowQ=lines[j].refs.length<2; }   // one reference: a quotation
+    }
+    return 99;
+  };
+  // the verse has this word twice in different forms (יְהִי and וַיְהִי in Gen 1:3), so it is quoted in two lists
+  const twin=(ESVerse.words(ref)||[]).some(x=>x.id===word.id&&ESRefs.ckey(x.w)!==form);
   const T=vpos(ref.book,ref.ch,ref.vs);
   let res=null;
-  // 1. the reference read in full; the one nearest to the word's form wins
+  // 1. the reference read in full; the one nearest to this word's form wins. It counts as found (✓) when it
+  //    is the only one or the form clearly picks it, and, for a twin, only when the form is seen in its list
   const hits=[]; lines.forEach((ln,li)=>{ if(ln.refs.some(x=>x.book===ref.book&&x.ch===ref.ch&&x.vs===ref.vs)) hits.push(li); });
-  if(hits.length){ const li=hits.sort((a,b)=>near(a)-near(b))[0]; res={li,exact:true}; }
+  if(hits.length){
+    const s=hits.map(li=>[near(li),li]).sort((a,b)=>a[0]-b[0]);
+    const clear=s.length===1||s[0][0]<s[1][0];
+    res={li:s[0][1], exact:clear&&(!twin||s[0][0]<99)};
+  }
   else {
     // 2. otherwise the tightest pair of readable references around the verse, in the word's own list
     const seq=[]; lines.forEach((ln,li)=>ln.refs.forEach(x=>{ if(x.ch&&x.vs&&BOOKPOS.has(x.book)) seq.push({p:vpos(x.book,x.ch,x.vs),li}); }));
