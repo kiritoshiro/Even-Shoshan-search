@@ -169,5 +169,5 @@ function drawOverlay(canvas, refs, x0, scale, dark, zones){
     ctx.fillText(o.text, R-1*scale, (o.by-0.4-x0*0)*scale);
   }
 }
-window.ESRefs={fullRef,refsAt, pageRefs, drawOverlay, parse, logical, clear:()=>{cache.clear();overlays.clear();}};
+window.ESRefs={books:BOOKS, lt:LT, hebNum, fullRef,refsAt, pageRefs, drawOverlay, parse, logical, clear:()=>{cache.clear();overlays.clear();}};
 })();
