@@ -28,6 +28,11 @@ aside{width:380px;max-width:100%;border-right:1px solid var(--line);background:v
 .hint{color:var(--mute);font-size:12.5px;margin-top:6px}
 .kbd{display:grid;grid-template-columns:repeat(11,1fr);gap:3px;margin-top:8px;direction:rtl}
 .kbd button{padding:4px 0;font-size:16px;border-radius:6px}
+.res .lem{font-size:16px;color:var(--mute)}
+.verse{font-size:22px;line-height:1.7;padding:4px 10px 8px;text-align:right}
+.vhead{display:flex;align-items:center;gap:6px;text-transform:none;font-size:14px;color:var(--ink);font-weight:600}
+.vhead .vstep{padding:0 8px;font-size:16px}
+.kbd .pt{font-size:17px;line-height:1.3;color:var(--mute)}
 #results{overflow:auto;flex:1;padding:6px 8px 16px}
 .res{display:block;width:100%;text-align:left;border:0;border-radius:8px;padding:8px 10px;background:none}
 .res:hover,.res.on{background:var(--accent-soft)}
@@ -102,8 +107,8 @@ footer a{color:inherit}
     <div id="toc" hidden></div>
     <div id="searchPane">
     <div class="searchbox">
-      <input id="q" type="search" placeholder="father · אב · av · H1 · p340" autocomplete="off" spellcheck="false">
-      <div class="hint">English gloss · Hebrew (vowels optional) · transliteration · Strong's (H1254) · page (p340)</div>
+      <input id="q" type="search" placeholder="father · אב · ויזרח · Gen 1:1 · H1 · p340" autocomplete="off" spellcheck="false">
+      <div class="hint">English gloss · Hebrew word, also as written in a verse (vowels optional) · verse (Gen 1:1, בראשית א 1) · transliteration · Strong's (H1254) · page (p340)</div>
       <div class="kbd" id="kbd"></div>
     </div>
     <div id="results"></div>
@@ -137,7 +142,7 @@ footer a{color:inherit}
     <div id="reftip" hidden></div>
   </section>
 </main>
-<footer>Page index made from the book's running heads. English glosses: <a href="https://github.com/STEPBible/STEPBible-Data" target="_blank" rel="noopener">STEPBible TBESH</a> (CC BY 4.0, Tyndale House Cambridge). Lookup lands on the page where the word's consonants fall alphabetically; check the neighbouring page if an entry starts mid-page.</footer>
+<footer>Page index made from the book's running heads. English glosses: <a href="https://github.com/STEPBible/STEPBible-Data" target="_blank" rel="noopener">STEPBible TBESH</a> (CC BY 4.0, Tyndale House Cambridge). Verse text and word forms: <a href="https://github.com/openscriptures/morphhb" target="_blank" rel="noopener">Open Scriptures Hebrew Bible</a> (Westminster Leningrad Codex, CC BY 4.0). Lookup lands on the page where the word's consonants fall alphabetically; check the neighbouring page if an entry starts mid-page.</footer>
 
 <script src="vendor/pdf.min.js"></script>
 <script src="data/pages.js"></script>
@@ -145,6 +150,8 @@ footer a{color:inherit}
 <script src="data/lexicon-lt.js"></script>
 <script src="i18n.js"></script>
 <script src="refs.js"></script>
+<script src="data/bible.js"></script>
+<script src="verses.js"></script>
 <script src="app.js"></script>
 <script src="contents.js"></script>
 </body>

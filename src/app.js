@@ -51,10 +51,14 @@ function search(q){
     const s='H'+m[1].padStart(4,'0')+(m[2]?m[2].toUpperCase():'');
     return {lex:LEXI.filter(r=>r.s===s||r.s.startsWith(s)&&!m[2]).slice(0,60),direct:null};
   }
+  const ref=window.ESVerse&&ESVerse.parse(q);
+  if (ref) return {lex:[],direct:null,verse:ref};
   if (/[֐-׿]/.test(q)){
     const k=key(q);
     const exact=LEXI.filter(r=>r.k===k), pre=LEXI.filter(r=>r.k!==k&&r.k.startsWith(k));
-    return {lex:exact.concat(pre).slice(0,60),direct:{heb:q}};
+    // the word as it is written in the Bible (with prefixes and endings) -> its dictionary entries
+    const forms=window.ESVerse?ESVerse.forms(q).map(f=>({...f,r:lexById(f.id)})).filter(f=>f.r):[];
+    return {lex:exact.concat(pre).slice(0,60),direct:{heb:q},forms};
   }
   const ql=q.toLowerCase(), qn=norm(q), words=ql.split(/\s+/);
   const re=new RegExp('(^|[^a-z])'+ql.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'($|[^a-z])');
@@ -76,10 +80,38 @@ function search(q){
   return {lex:scored.slice(0,80).map(x=>x[1]),direct:null};
 }
 
+// lexicon row for an extended Strong's number from data/bible.js ("1254A", "0430" -> first H0430x row)
+const BYID=new Map(); for(const r of LEXI){ BYID.has(r.s)||BYID.set(r.s,r); const n=r.s.slice(0,5); BYID.has(n)||BYID.set(n,r); }
+const lexById=id=>id?BYID.get('H'+id)||BYID.get('H'+id.slice(0,4)):null;
+
 const $=id=>document.getElementById(id);
 const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+// gloss in the chosen language: Lithuanian first in Lithuanian mode, English in brackets after it
+const glossHtml=r=>LANG==='lt'&&r.lt?`<span class="gl">${esc(r.lt)}</span> <span class="meta">(${esc(r.g)})</span>`:`<span class="gl">${esc(r.g)}</span>${r.lt?` <span class="meta">(${esc(r.lt)})</span>`:''}`;
+const lemmaOf=r=>r.h.replace(/[\/֑-֯]/g,'');
+// one Bible word (or word form) -> its dictionary entry and concordance page
+function wordRow(form, r, extra){
+  const b=pageFor(lemmaOf(r));
+  return `<button class="res" data-p="${b?b.page:''}"><div class="top"><span class="heb he">${esc(form)}</span><span class="meta">→</span><span class="he lem">${esc(lemmaOf(r))}</span><span class="tr">${esc(r.t)}</span><span class="pg">${b?T('pAbbr')+' '+b.page:''}</span></div><div>${glossHtml(r)} <span class="meta">· ${esc(r.s)}${extra?' · '+extra:''}</span></div></button>`;
+}
+let verseRef=null;
+function renderVerse(ref){
+  const ws=ESVerse.words(ref); verseRef=ws?ref:null;
+  if(!ws) return `<div class="sec">${T('noVerse',{ref:esc(ESVerse.label(ref))})}</div>`;
+  const out=[`<div class="sec vhead"><button class="vstep" data-d="-1" title="${T('prevVerse')}">‹</button><span>${esc(ESVerse.label(ref))}</span><button class="vstep" data-d="1" title="${T('nextVerse')}">›</button></div>`,
+    `<div class="verse he" dir="rtl">${ws.map(x=>esc(x.w)).join(' ').replace(/־ /g,'־')}</div>`,
+    `<div class="sec">${T('verseWords')}</div>`];
+  for(const x of ws){ const r=lexById(x.id); if(r) out.push(wordRow(x.w.replace(/־$/,''),r)); }
+  return out.join('');
+}
 function render(q){
-  const {lex,direct}=search(q), out=[];
+  const {lex,direct,verse,forms}=search(q), out=[];
+  if(verse){ $('results').innerHTML=renderVerse(verse); return; }
+  verseRef=null;
+  if(forms&&forms.length){
+    out.push(`<div class="sec">${T('inBible')}</div>`);
+    for(const f of forms.slice(0,12)) out.push(wordRow(f.forms[0]||q, f.r, T('times',{n:f.n})+(f.forms.length>1?' · '+f.forms.slice(1).map(esc).join(', '):'')));
+  }
   if(direct){
     let b=direct.page?BYPAGE.get(nearest(direct.page)):pageFor(direct.heb);
     if(b){
@@ -90,25 +122,28 @@ function render(q){
     out.push(`<div class="sec">${T(lex.length>1?'matchesN':'matches1',{n:lex.length})}</div>`);
     for(const r of lex){
       const b=pageFor(r.h);
-      // Lithuanian mode: Lithuanian gloss first, English after it
-      const gl=LANG==='lt'&&r.lt?`<span class="gl">${esc(r.lt)}</span> <span class="meta">(${esc(r.g)})</span>`:`<span class="gl">${esc(r.g)}</span>${r.lt?` <span class="meta">(${esc(r.lt)})</span>`:''}`;
-      out.push(`<button class="res" data-p="${b?b.page:''}"><div class="top"><span class="heb he">${esc(r.h)}</span><span class="tr">${esc(r.t)}</span><span class="pg">${b?T('pAbbr')+' '+b.page:''}</span></div><div>${gl} <span class="meta">· ${esc(r.s)} · ${esc(r.p)}</span></div><div class="df">${esc(r.d)}</div></button>`);
+      out.push(`<button class="res" data-p="${b?b.page:''}"><div class="top"><span class="heb he">${esc(r.h)}</span><span class="tr">${esc(r.t)}</span><span class="pg">${b?T('pAbbr')+' '+b.page:''}</span></div><div>${glossHtml(r)} <span class="meta">· ${esc(r.s)} · ${esc(r.p)}</span></div><div class="df">${esc(r.d)}</div></button>`);
     }
-  } else if(q.trim() && !direct) out.push(`<div class="sec">${T('noMatches')}</div>`);
+  } else if(q.trim() && !direct && !(forms&&forms.length)) out.push(`<div class="sec">${T('noMatches')}</div>`);
   $('results').innerHTML=out.join('');
 }
 $('q').addEventListener('input',e=>render(e.target.value));
 $('q').addEventListener('keydown',e=>{ if(e.key==='Enter'){const f=$('results').querySelector('.res[data-p]:not([data-p=""])'); if(f) f.click();} });
 $('results').addEventListener('click',e=>{
+  const s=e.target.closest('.vstep');
+  if(s){ const r=verseRef&&ESVerse.step(verseRef,+s.dataset.d); if(r){ const q=$('q'); q.value=ESVerse.label(r); render(q.value); } return; }
   const b=e.target.closest('.res'); if(!b||!b.dataset.p) return;
   document.querySelectorAll('.res.on').forEach(x=>x.classList.remove('on')); b.classList.add('on');
   show(+b.dataset.p);
 });
-// Hebrew keypad
+// Hebrew keypad: letters, then vowel points (optional: they narrow Bible word forms to that vocalisation)
 const LET='אבגדהוזחטיכלמנסעפצקרשת'.split('').concat(['⌫']);
-$('kbd').innerHTML=LET.map(c=>`<button class="he" type="button">${c}</button>`).join('');
+const PTS=['ְ','ֱ','ֲ','ֳ','ִ','ֵ','ֶ','ַ','ָ','ֹ','ֻ','ּ','ׁ','ׂ'];
+$('kbd').innerHTML=LET.map(c=>`<button class="he" type="button" data-c="${c}">${c}</button>`).join('')
+  // each point is shown on a sample letter (dagesh on ב, shin/sin dots on ש); only the point is typed
+  +PTS.map(c=>`<button class="he pt" type="button" data-c="${c}" title="${T('point')}">${c==='ּ'?'ב':c>'׀'?'ש':'א'}${c}</button>`).join('');
 $('kbd').addEventListener('click',e=>{const c=e.target.closest('button'); if(!c) return; const q=$('q');
-  q.value = c.textContent==='⌫' ? q.value.slice(0,-1) : q.value+c.textContent; render(q.value); q.focus();});
+  q.value = c.dataset.c==='⌫' ? [...q.value].slice(0,-1).join('') : q.value+c.dataset.c; render(q.value); q.focus();});
 
 // ---------- viewer ----------
 // Each view (a whole page, or one column of it) is rendered once into `raw`, then painted onto the

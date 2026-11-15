@@ -1,6 +1,6 @@
 # Even-Shoshan Search
 
-A small desktop app for finding words in Avraham Even-Shoshan's *A New Concordance of the Old Testament* (Hebrew & Aramaic). Type a word in **English, Hebrew, transliteration or a Strong's number** and it opens the right page of your scanned copy.
+A small desktop app for finding words in Avraham Even-Shoshan's *A New Concordance of the Old Testament* (Hebrew & Aramaic). Type a word in **English, Hebrew, transliteration or a Strong's number**, or a **Bible verse**, and it opens the right page of your scanned copy.
 
 ## Download
 
@@ -37,6 +37,7 @@ The **LT** button at the top switches the whole app to Lithuanian, and **EN** sw
 - The interface, the Contents tab and the introduction titles are in Lithuanian. The introduction text itself is in English, as in the book.
 - Glosses are in Lithuanian, translated from the Hebrew word rather than from the English gloss. When several Hebrew words share one English gloss, each gets its own Lithuanian word. Lithuanian Bible (RK 1999) vocabulary is used where it applies. The English gloss is shown after the Lithuanian one.
 - Search accepts Lithuanian words, and letters with or without diacritics (`seti` finds `sėti`).
+- Verses can be typed in RK style (`Pr 1, 1`, `Joz 22, 20`, or the book name without diacritics, e.g. `pradzios 2 7`). The verse title is shown as `Jozuės knyga 22, 20`.
 - Bible references use RK abbreviations and citation style: `Joz 22, 20`. The tooltip shows `Jozuės knyga 22, 20`. RK follows the Hebrew chapter and verse numbering, as this concordance does.
 - The Lithuanian glosses (`data/glosses-lt.tsv`) are machine-assisted translations and have not been reviewed by a translator. Corrections are welcome.
 
@@ -56,6 +57,8 @@ The page you are reading stays highlighted.
 |---|---|---|
 | English gloss | `seed`, `to create` | Lexicon matches with Hebrew, transliteration and page |
 | Hebrew (vowels optional) | `זרע`, `שָׁלוֹם` | Page where that spelling falls alphabetically, plus lexicon matches |
+| Hebrew word as written in a verse | `ויזרח`, `בְּרֵאשִׁית`, `לו` | **In the Bible:** the dictionary entries this form belongs to, how often it occurs, and their pages (`ויזרח` → `זָרַח`, p. 339). Vowel points you type narrow the forms; points you leave out don't matter |
+| Verse | `Gen 1:1`, `Pr 1, 1`, `1 Sam 3:4`, `Psalm 23`, `בראשית א 1`, `ש״ב כג 4` | The verse in Hebrew, then each word with its dictionary form, gloss and concordance page. ‹ › step to the previous and next verse |
 | Transliteration | `bara`, `shalom` | Lexicon matches |
 | Strong's number | `H1254` | That entry |
 | Printed page | `p340` | Opens page 340 |
@@ -75,7 +78,9 @@ Buttons under the page toolbar (keyboard shortcut in brackets):
 
 The settings are remembered.
 
-Press Enter to open the first result, use ← → for the previous and next page, and `/` to jump to the search box. There is an on-screen Hebrew keypad.
+Press Enter to open the first result, use ← → for the previous and next page, and `/` to jump to the search box. There is an on-screen Hebrew keypad with vowel points (shown on a sample letter; only the point is typed).
+
+Verse numbers follow the Hebrew Bible, as the concordance and the Lithuanian RK translation do. English Bibles sometimes differ by a verse or a chapter (for example English Genesis 32:31 is Hebrew 32:32). Book names are accepted in English (`Gen`, `Genesis`), Lithuanian RK style (`Pr`, `Pradžios`) and Hebrew (`בראשית`). Ambiguous abbreviations such as `Pr` follow the interface language.
 
 ## How it works
 
@@ -84,6 +89,7 @@ Press Enter to open the first result, use ← → for the previous and next page
 - The book lists many words under their root, so the alphabetical spot may only hold a cross-reference. Follow it.
 - Scan quirks: printed page 506 is missing from the scan and page 508 is duplicated. Blank and section-divider pages are skipped.
 - English glosses come from the [STEPBible TBESH lexicon](https://github.com/STEPBible/STEPBible-Data) (Tyndale House Cambridge, CC BY 4.0).
+- Verse text and the dictionary form of every word come from the [Open Scriptures Hebrew Bible](https://github.com/openscriptures/morphhb): the Westminster Leningrad Codex with lemmas (Strong's numbers). `src/data/bible.js` holds every verse with vowel points (no cantillation) and each word's Strong's number. Where the written text (ketiv) has a marginal reading (qere), the qere is shown. A word's page is found from its dictionary form, so it is subject to the same alphabetical lookup as everything else.
 
 ## Development
 
@@ -93,7 +99,7 @@ The app is plain HTML/JS in `src/`, wrapped with [Tauri 2](https://tauri.app).
 npm install
 npm run dev      # run the desktop app
 npm run build    # build installers for the current OS
-npm run data     # regenerate src/data/*.js from data/page-index.tsv and TBESH
+npm run data     # regenerate src/data/*.js from data/page-index.tsv, TBESH and OSHB (downloaded into data/ if missing)
 ```
 
 `src/index.html` also works in a browser served over http (for example `python -m http.server -d src`).
@@ -102,4 +108,4 @@ To make a release, bump the version in `src-tauri/tauri.conf.json`, then push a 
 
 ## Licenses
 
-Code: MIT. pdf.js: Apache-2.0 (`src/vendor/pdfjs-LICENSE`). Lexicon data: CC BY 4.0, STEPBible.org / Tyndale House.
+Code: MIT. pdf.js: Apache-2.0 (`src/vendor/pdfjs-LICENSE`). Lexicon data: CC BY 4.0, STEPBible.org / Tyndale House. Bible text: Westminster Leningrad Codex (public domain); lemmas: Open Scriptures Hebrew Bible, CC BY 4.0.
