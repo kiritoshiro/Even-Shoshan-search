@@ -67,6 +67,7 @@ function parse(line){
 
 const cache=new Map();   // pdf page index -> [{x0,x1,y0,y1,str}] in page points, top-left origin
 async function items(doc, idx){
+  sameDoc(doc);
   if(cache.has(idx)) return cache.get(idx);
   const p=await doc.getPage(idx+1), vp=p.getViewport({scale:1}), tc=await p.getTextContent();
   const list=tc.items.filter(i=>/[א-ת]/.test(i.str)).map(i=>{
@@ -74,7 +75,7 @@ async function items(doc, idx){
     // right-to-left runs are anchored at their right edge
     return i.dir==='rtl'?{x0:x-i.width,x1:x,y0:y-h,y1:y+2,by:y,str:i.str}:{x0:x,x1:x+i.width,y0:y-h,y1:y+2,by:y,str:i.str};
   });
-  cache.set(idx,list); return list;
+  if(doc===rawDoc) cache.set(idx,list); return list;
 }
 // references on the line under (x,y); only when the cursor is on or right beside a word
 async function refsAt(doc, idx, x, y){
@@ -107,6 +108,7 @@ const CHAPTERS={'Genesis':50,'Exodus':40,'Leviticus':27,'Numbers':36,'Deuteronom
   '1 Chronicles':29,'2 Chronicles':36};
 const overlays=new Map();
 async function pageRefs(doc, idx){
+  sameDoc(doc);
   if(overlays.has(idx)) return overlays.get(idx);
   const list=await items(doc,idx), lines=[];
   for(const it of [...list].sort((a,b)=>(a.y0+a.y1)-(b.y0+b.y1))){
@@ -133,7 +135,7 @@ async function pageRefs(doc, idx){
                 text:LANG()==='lt'?`${LT[r.en][0]} ${r.ch}, ${r.vs}`:`${ABBR[r.en]} ${r.ch}:${r.vs}`, ref:r});
     }
   }
-  overlays.set(idx,out); return out;
+  if(doc===rawDoc) overlays.set(idx,out); return out;
 }
 // Draw the overlays onto a canvas showing page points from x0 at `scale` px per point.
 // `zones` = [[left,right],...] in points: the reference area at the left of each column; anything
@@ -174,10 +176,10 @@ function drawOverlay(canvas, refs, x0, scale, dark, zones){
 // compact lists ("book chapter verse, verse; chapter verse ... + next book"). The OCR often garbles the
 // chapter letters, so a line may give only its book. Columns are found from the text itself.
 const raws=new Map();   // pdf page index -> [{x0,x1,y,str}] including digits-only items, page width
-// raws and lineCache belong to one document: another PDF starts them afresh, and a read that
+// all page caches belong to one document: another PDF starts them afresh, and a read that
 // finishes after the PDF was changed is not stored
 let rawDoc=null;
-const sameDoc=doc=>{ if(doc!==rawDoc){ rawDoc=doc; raws.clear(); lineCache.clear(); } };
+const sameDoc=doc=>{ if(doc!==rawDoc){ rawDoc=doc; cache.clear(); overlays.clear(); raws.clear(); lineCache.clear(); } };
 async function rawItems(doc, idx){
   sameDoc(doc);
   if(raws.has(idx)) return raws.get(idx);

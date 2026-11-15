@@ -104,7 +104,7 @@ function entryPages(heb){
   return out;
 }
 const BOOKPOS=new Map((window.ESRefs?ESRefs.books:[]).map(([,en],i)=>[en,i]));
-const vpos=(b,c,v)=>BOOKPOS.get(b)*1e6+c*1e3+v;
+const vpos=(b,c,v)=>BOOKPOS.get(b)*1e6+c*1e3+v, bookOf=p=>Math.floor(p/1e6);
 const FOUND=new Map();   // lemma|form|verse -> result
 // {page, col, y, y2, exact, pages:[first,last]} for one word of a verse; null without the PDF.
 // Even-Shoshan lists each form of a word (ויעש, ויעשו, עשה ...) separately, in biblical order, with
@@ -129,7 +129,7 @@ async function findInEntry(word, ref){
     let low=Infinity, lowQ=true;
     for(let j=li;j>=Math.max(0,li-25);j--){
       const ps=pos(lines[j]);
-      if(j<li&&ps.length&&Math.max(...ps)>low+3e6){       // jumps back over 3+ books: a garbled reference does not
+      if(j<li&&ps.length&&bookOf(Math.max(...ps))-bookOf(low)>=3){   // jumps back 3+ books: a garbled reference does not
         if(lowQ) break;
         low=Infinity;
       }
