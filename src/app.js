@@ -90,9 +90,97 @@ const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&qu
 const glossHtml=r=>LANG==='lt'&&r.lt?`<span class="gl">${esc(r.lt)}</span> <span class="meta">(${esc(r.g)})</span>`:`<span class="gl">${esc(r.g)}</span>${r.lt?` <span class="meta">(${esc(r.lt)})</span>`:''}`;
 const lemmaOf=r=>r.h.replace(/[\/֑-֯]/g,'');
 // one Bible word (or word form) -> its dictionary entry and concordance page
-function wordRow(form, r, extra){
+function wordRow(form, r, extra, w){
   const b=pageFor(lemmaOf(r));
-  return `<button class="res" data-p="${b?b.page:''}"><div class="top"><span class="heb he">${esc(form)}</span><span class="meta">→</span><span class="he lem">${esc(lemmaOf(r))}</span><span class="tr">${esc(r.t)}</span><span class="pg">${b?T('pAbbr')+' '+b.page:''}</span></div><div>${glossHtml(r)} <span class="meta">· ${esc(r.s)}${extra?' · '+extra:''}</span></div></button>`;
+  return `<button class="res" data-p="${b?b.page:''}"${w!=null?` data-w="${w}"`:''}><div class="top"><span class="heb he">${esc(form)}</span><span class="meta">→</span><span class="he lem">${esc(lemmaOf(r))}</span><span class="tr">${esc(r.t)}</span><span class="pg">${b?T('pAbbr')+' '+b.page:''}</span></div><div>${glossHtml(r)} <span class="meta">· ${esc(r.s)}${extra?' · '+extra:''}</span></div></button>`;
+}
+// ---------- where a verse is quoted in the concordance ----------
+// An entry runs from the first page whose last running head reaches the word to the last page whose
+// first head is not past it. Its lines are read from the scan's OCR text layer (refs.js lineRefs).
+function entryPages(heb){
+  const k=key(heb), b=pageFor(heb); if(!b) return [];
+  let i=BODY.indexOf(b); const out=[b];
+  while(++i<BODY.length&&out.length<150&&cmp(key(BODY[i].first),k)<=0) out.push(BODY[i]);
+  return out;
+}
+const BOOKPOS=new Map((window.ESRefs?ESRefs.books:[]).map(([,en],i)=>[en,i]));
+const vpos=(b,c,v)=>BOOKPOS.get(b)*1e6+c*1e3+v, bookOf=p=>Math.floor(p/1e6);
+const FOUND=new Map();   // lemma|form|verse -> result
+// {page, col, y, y2, exact, pages:[first,last]} for one word of a verse; null without the PDF.
+// Even-Shoshan lists each form of a word (ויעש, ויעשו, עשה ...) separately, in biblical order, with
+// quotation lines first and, for busy forms, compact reference lists after them.
+async function findInEntry(word, ref){
+  const r=lexById(word.id), doc=pdf; if(!r||!doc||!window.ESRefs) return null;
+  const id=r.s+'|'+word.w+'|'+ref.book+' '+ref.ch+':'+ref.vs; if(FOUND.has(id)) return FOUND.get(id);
+  const pages=entryPages(lemmaOf(r)); if(!pages.length) return null;
+  const form=ESRefs.ckey(word.w), lines=[];
+  for(const p of pages){
+    const ls=await ESRefs.lineRefs(doc,p.idx);
+    if(doc!==pdf) return null;                 // another PDF was opened meanwhile
+    for(const ln of ls) lines.push({...ln,page:p.page});
+  }
+  const span=[pages[0].page,pages[pages.length-1].page];
+  // the word's own form on this line or on the lines before it in the same list; a list ends where
+  // biblical order starts again (a reference several books later than the ones after it).
+  const pos=ln=>ln.refs.filter(x=>x.ch&&x.vs&&BOOKPOS.has(x.book)).map(x=>vpos(x.book,x.ch,x.vs));
+  // A form's quotation lines are followed by a compact list of its other references, which starts again
+  // from Genesis; so a restart into a compact list is the same form, a restart into a quotation line is not.
+  const near=li=>{
+    let low=Infinity, lowQ=true;
+    for(let j=li;j>=Math.max(0,li-25);j--){
+      const ps=pos(lines[j]);
+      if(j<li&&ps.length&&bookOf(Math.max(...ps))-bookOf(low)>=3){   // jumps back 3+ books: a garbled reference does not
+        if(lowQ) break;
+        low=Infinity;
+      }
+      if(lines[j].words.includes(form)) return li-j;
+      if(ps.length&&Math.min(...ps)<low){ low=Math.min(...ps); lowQ=lines[j].refs.length<2; }   // one reference: a quotation
+    }
+    return 99;
+  };
+  // the verse has this word twice in different forms (יְהִי and וַיְהִי in Gen 1:3), so it is quoted in two lists
+  const twin=(ESVerse.words(ref)||[]).some(x=>x.id===word.id&&ESRefs.ckey(x.w)!==form);
+  const T=vpos(ref.book,ref.ch,ref.vs);
+  let res=null;
+  // 1. the reference read in full; the one nearest to this word's form wins. It counts as found (✓) when it
+  //    is the only one or the form clearly picks it, and, for a twin, only when the form is seen in its list
+  const hits=[]; lines.forEach((ln,li)=>{ if(ln.refs.some(x=>x.book===ref.book&&x.ch===ref.ch&&x.vs===ref.vs)) hits.push(li); });
+  if(hits.length){
+    const s=hits.map(li=>[near(li),li]).sort((a,b)=>a[0]-b[0]);
+    const clear=s.length===1||s[0][0]<s[1][0];
+    res={li:s[0][1], exact:clear&&(!twin||s[0][0]<99)};
+  }
+  else {
+    // 2. otherwise the tightest pair of readable references around the verse, in the word's own list
+    const seq=[]; lines.forEach((ln,li)=>ln.refs.forEach(x=>{ if(x.ch&&x.vs&&BOOKPOS.has(x.book)) seq.push({p:vpos(x.book,x.ch,x.vs),li}); }));
+    const cands=[];
+    for(let k=0;k+1<seq.length;k++){
+      const a=seq[k], b=seq[k+1], gap=b.p-a.p; if(!(a.p<T&&T<b.p)||gap>=4e6||b.li-a.li>12) continue;
+      let book=false; for(let j=a.li;j<=b.li;j++) if(lines[j].refs.some(x=>x.book===ref.book&&(!x.ch||x.ch===ref.ch))) book=true;
+      const nr=near(a.li)<99;
+      if(!nr&&!(book&&gap<1e6)) continue;     // no sign that this is the word's own list
+      const score=(nr?0:1e8)+(book?0:5e6)+gap;
+      cands.push({score,a,b});
+    }
+    for(const {a,b} of cands.sort((x,y)=>x.score-y.score)){
+      // lines between the two that may hold the verse: unreadable, or this book with the chapter or verse unread
+      const fits=ln=>!ln.refs.length||ln.refs.some(x=>x.book===ref.book&&(!x.ch||x.ch===ref.ch)&&(!x.vs||x.vs===ref.vs));
+      const gap=lines.slice(a.li+1,b.li).filter(fits);
+      if(a.li===b.li) res={li:a.li};                                   // inside one compact list line
+      else if(gap.length){                                             // unreadable lines between the two
+        res=gap.length===1?{li:lines.indexOf(gap[0])}:{li:lines.indexOf(gap[0]), li2:lines.indexOf(gap[gap.length-1])};
+      }
+      // two neighbouring quotation lines with nothing between them: the verse is not in this list
+      else if(!(lines[a.li].q&&lines[b.li].q&&lines[a.li].refs.filter(x=>x.ch&&x.vs).length===1)) res={li:a.li, li2:b.li};
+      if(res){ res.exact=false; break; }
+    }
+  }
+  if(res){
+    const A=lines[res.li], B=res.li2!=null?lines[res.li2]:A;
+    const y2=B.page===A.page&&B.col===A.col?B.y:A.y;
+    res={page:A.page, col:A.col, y:A.y, y2, exact:res.exact, pages:span};
+  }
+  FOUND.set(id,res||{pages:span}); return FOUND.get(id);
 }
 let verseRef=null;
 // verse view options: interlinear (literal English + grammar under each word) and the user's own Bible translations
@@ -126,9 +214,45 @@ function renderVerse(ref){
     `<div class="vopts"><label title="${T('optIlTip')}"><input type="checkbox" data-opt="il"${VOPT.il?' checked':''}> ${T('optIl')}</label><label><input type="checkbox" data-opt="tr"${VOPT.tr?' checked':''}> ${T('optTr')}</label></div>`];
   if(VOPT.il) out.push(interlinearHtml(ref));
   if(VOPT.tr) out.push(translationsHtml(ref));
-  out.push(`<div class="sec">${T('verseWords')}</div>`);
-  for(const x of ws){ const r=lexById(x.id); if(r) out.push(wordRow(x.w.replace(/־$/,''),r)); }
+  out.push(`<div class="sec">${T('verseConc')}</div><div class="vconc" id="vconc">${pdf?T('verseLooking'):T('verseNeedPdf')}</div>`);
+  ws.forEach((x,i)=>{ const r=lexById(x.id); if(r) out.push(wordRow(x.w.replace(/־$/,''),r,'',i)); });
+  out.push(`<div class="vconc legend" id="vlegend" hidden>${T('verseLegend')}</div>`);
   return out.join('');
+}
+// find each word's line for the verse, one word after another, and fill in the pages as they come
+let locSeq=0;
+async function locateVerse(ref){
+  const seq=++locSeq, ws=ESVerse.words(ref)||[], pages=new Map();
+  const mark=f=>`data-p="${f.page}" data-col="${f.col}" data-y="${f.y}" data-y2="${f.y2}"${f.exact?'':' data-approx="1"'}`;
+  const summary=done=>{
+    const box=$('vconc'); if(!box) return;
+    const chips=[...pages.values()].sort((a,b)=>a.page-b.page).map(f=>
+      `<button class="vpg${f.exact?'':' approx'}" ${mark(f)} title="${T(f.exact?'foundTip':'approxTip')}">${f.exact?'':'≈ '}${f.page}</button>`).join('');
+    box.innerHTML=(done?'':`<div>${T('verseLooking')}</div>`)+(chips?`<div>${T('versePages')}</div><div class="vpgs">${chips}</div>`:'');
+    if(done&&$('vlegend')) $('vlegend').hidden=false;
+  };
+  for(const [i,x] of ws.entries()){
+    const row=document.querySelector(`.res[data-w="${i}"]`); if(!row) continue;
+    let f=null; try{ f=await findInEntry(x,ref); }catch(e){}
+    if(seq!==locSeq) return;
+    if(!f) continue;
+    const pg=row.querySelector('.pg');
+    if(f.page){
+      Object.assign(row.dataset,{p:f.page,col:f.col,y:f.y,y2:f.y2}); if(!f.exact) row.dataset.approx=1; row.title=T(f.exact?'foundTip':'approxTip');
+      pg.textContent=(f.exact?'✓ ':'≈ ')+T('pAbbr')+' '+f.page; pg.classList.toggle('approx',!f.exact);
+      const e=pages.get(f.page); if(!e||!e.exact&&f.exact) pages.set(f.page,f);
+    } else {
+      const [a,b]=f.pages; row.title=T('entryTip'); pg.classList.add('entry');
+      pg.textContent=a===b?T('pAbbr')+' '+a:`${T('pAbbr')} ${a}–${b}`;
+    }
+    summary(false);
+  }
+  summary(true);
+}
+// open a result: with a found line, its column with the line highlighted
+function openHit(el){
+  const d=el.dataset;
+  if(d.y) show(+d.p, +d.col, {y:+d.y, y2:+d.y2, approx:!!d.approx}); else show(+d.p);
 }
 ESTrans.onChange(rerender); ESTrans.ready.then(rerender);
 $('trFile').onchange=async e=>{
@@ -145,7 +269,7 @@ $('results').addEventListener('change',e=>{
 });
 function render(q){
   const {lex,direct,verse,forms}=search(q), out=[];
-  if(verse){ $('results').innerHTML=renderVerse(verse); return; }
+  if(verse){ $('results').innerHTML=renderVerse(verse); if(verseRef&&pdf) locateVerse(verseRef); return; }
   verseRef=null;
   if(forms&&forms.length){
     out.push(`<div class="sec">${T('inBible')}</div>`);
@@ -174,9 +298,10 @@ $('results').addEventListener('click',e=>{
   if(del){ e.preventDefault(); if(confirm(T('trRemoveAsk'))) ESTrans.remove(del.dataset.del); return; }
   const s=e.target.closest('.vstep');
   if(s){ const r=verseRef&&ESVerse.step(verseRef,+s.dataset.d); if(r){ const q=$('q'); q.value=ESVerse.label(r); render(q.value); } return; }
+  const v=e.target.closest('.vpg'); if(v){ openHit(v); return; }
   const b=e.target.closest('.res'); if(!b||!b.dataset.p) return;
   document.querySelectorAll('.res.on').forEach(x=>x.classList.remove('on')); b.classList.add('on');
-  show(+b.dataset.p);
+  openHit(b);
 });
 // Hebrew keypad: letters, then vowel points (optional: they narrow Bible word forms to that vocalisation)
 const LET='אבגדהוזחטיכלמנסעפצקרשת'.split('').concat(['⌫']);
@@ -224,6 +349,13 @@ function filterInto(src, dst){
 function repaint(){
   const cv=$('cv'); if(!raw.width) return; filterInto(raw,cv); cv.style.background=VIEW.dark?'#1b1a18':'#fff'; hires=null;
   if(VIEW.eng&&view&&view.refs) ESRefs.drawOverlay(cv, view.refs, view.x0, view.s*DPR(), VIEW.dark, view.zones);
+  if(view&&view.mark) markLine(cv, view.mark, view.s*DPR());
+}
+// a soft band across the column on the found line (the line itself stays readable); fainter when approximate
+function markLine(cv, m, sc){
+  const ctx=cv.getContext('2d'); ctx.save(); ctx.globalCompositeOperation=VIEW.dark?'screen':'multiply'; if(m.approx) ctx.globalAlpha=.5;
+  ctx.fillStyle=VIEW.dark?'#5a4a10':'#ffe27a'; const y2=Math.max(m.y,m.y2||m.y);
+  ctx.fillRect(0,Math.round((m.y-8.5)*sc),cv.width,Math.round((y2-m.y+11)*sc)); ctx.restore();
 }
 // English references: load this page's overlay list once, then repaint
 async function loadRefs(){ if(!VIEW.eng||!view||view.refs||!window.ESRefs) return; const v=view;
@@ -257,7 +389,8 @@ async function columnsFor(b){
 // reading order is right to left: column 0 is the rightmost
 const colRange=(e,k)=>[e[2-k],e[3-k]];
 
-async function show(page, c=null){
+// mark = {y} in page points: a line to highlight and scroll to (a verse found in an entry)
+async function show(page, c=null, mark=null){
   if(page>0) page=Math.max(MINPAGE,Math.min(MAXPAGE,page));   // negative = front/back matter (contents.js)
   const b=BYPAGE.get(page); cur=page; col=c; $('pg').value=page>0?page:''; setHeads(b);
   if(window.onShowPage) onShowPage(page);
@@ -274,12 +407,13 @@ async function show(page, c=null){
   const vp=p.getViewport({scale:s*DPR(),offsetX:-x0*s*DPR()});
   if(renderTask) try{renderTask.cancel()}catch(e){}
   raw.width=Math.round((x1-x0)*s*DPR()); raw.height=Math.round(vp.height);
-  view={page,col,x0,x1,s,h:base.height};
+  view={page,col,x0,x1,s,h:base.height,mark};
   cv.hidden=false; $('empty').hidden=true; cv.classList.add('busy');
   renderTask=p.render({canvasContext:raw.getContext('2d'),viewport:vp});
   try{ await renderTask.promise; }catch(e){ return; }
   if(seq!==renderSeq) return;
-  repaint(); cv.style.width=(raw.width/DPR())+'px'; cv.classList.remove('busy'); stage.scrollTop=0;
+  repaint(); cv.style.width=(raw.width/DPR())+'px'; cv.classList.remove('busy');
+  stage.scrollTop=mark?Math.max(0,mark.y*s-stage.clientHeight/3):0;
   loadRefs();
 }
 
@@ -415,7 +549,7 @@ let rz; window.addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout((
 // Plain browser: file picker; Chrome/Edge remember the file handle in IndexedDB.
 const TAURI = window.__TAURI__;
 const BTN = $('openBtn');
-function opened(){ BTN.textContent=T('change'); BTN.classList.remove('primary'); COLS.clear(); hires=null; if(window.ESRefs) ESRefs.clear(); show(cur||MINPAGE); }
+function opened(){ BTN.textContent=T('change'); BTN.classList.remove('primary'); COLS.clear(); hires=null; FOUND.clear(); if(window.ESRefs) ESRefs.clear(); show(cur||MINPAGE); if(verseRef) render($('q').value); }
 async function load(src, label){
   BTN.textContent=T('loading');
   try{

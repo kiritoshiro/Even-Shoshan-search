@@ -67,6 +67,7 @@ function parse(line){
 
 const cache=new Map();   // pdf page index -> [{x0,x1,y0,y1,str}] in page points, top-left origin
 async function items(doc, idx){
+  sameDoc(doc);
   if(cache.has(idx)) return cache.get(idx);
   const p=await doc.getPage(idx+1), vp=p.getViewport({scale:1}), tc=await p.getTextContent();
   const list=tc.items.filter(i=>/[א-ת]/.test(i.str)).map(i=>{
@@ -74,7 +75,7 @@ async function items(doc, idx){
     // right-to-left runs are anchored at their right edge
     return i.dir==='rtl'?{x0:x-i.width,x1:x,y0:y-h,y1:y+2,by:y,str:i.str}:{x0:x,x1:x+i.width,y0:y-h,y1:y+2,by:y,str:i.str};
   });
-  cache.set(idx,list); return list;
+  if(doc===rawDoc) cache.set(idx,list); return list;
 }
 // references on the line under (x,y); only when the cursor is on or right beside a word
 async function refsAt(doc, idx, x, y){
@@ -102,11 +103,12 @@ const ABBR={'Genesis':'Gen','Exodus':'Exod','Leviticus':'Lev','Numbers':'Num','D
 // chapters per book in the Hebrew Bible, to reject impossible OCR readings
 const CHAPTERS={'Genesis':50,'Exodus':40,'Leviticus':27,'Numbers':36,'Deuteronomy':34,'Joshua':24,'Judges':21,'1 Samuel':31,
   '2 Samuel':24,'1 Kings':22,'2 Kings':25,'Isaiah':66,'Jeremiah':52,'Ezekiel':48,'Hosea':14,'Joel':4,'Amos':9,'Obadiah':1,
-  'Jonah':2,'Micah':7,'Nahum':3,'Habakkuk':3,'Zephaniah':3,'Haggai':2,'Zechariah':14,'Malachi':3,'Psalms':150,'Proverbs':31,
+  'Jonah':4,'Micah':7,'Nahum':3,'Habakkuk':3,'Zephaniah':3,'Haggai':2,'Zechariah':14,'Malachi':3,'Psalms':150,'Proverbs':31,
   'Job':42,'Song of Songs':8,'Ruth':4,'Lamentations':5,'Ecclesiastes':12,'Esther':10,'Daniel':12,'Ezra':10,'Nehemiah':13,
   '1 Chronicles':29,'2 Chronicles':36};
 const overlays=new Map();
 async function pageRefs(doc, idx){
+  sameDoc(doc);
   if(overlays.has(idx)) return overlays.get(idx);
   const list=await items(doc,idx), lines=[];
   for(const it of [...list].sort((a,b)=>(a.y0+a.y1)-(b.y0+b.y1))){
@@ -133,7 +135,7 @@ async function pageRefs(doc, idx){
                 text:LANG()==='lt'?`${LT[r.en][0]} ${r.ch}, ${r.vs}`:`${ABBR[r.en]} ${r.ch}:${r.vs}`, ref:r});
     }
   }
-  overlays.set(idx,out); return out;
+  if(doc===rawDoc) overlays.set(idx,out); return out;
 }
 // Draw the overlays onto a canvas showing page points from x0 at `scale` px per point.
 // `zones` = [[left,right],...] in points: the reference area at the left of each column; anything
@@ -169,5 +171,92 @@ function drawOverlay(canvas, refs, x0, scale, dark, zones){
     ctx.fillText(o.text, R-1*scale, (o.by-0.4-x0*0)*scale);
   }
 }
-window.ESRefs={books:BOOKS, lt:LT, hebNum, fullRef,refsAt, pageRefs, drawOverlay, parse, logical, clear:()=>{cache.clear();overlays.clear();}};
+// --- every reference of a page, line by line in reading order, for finding one verse in an entry ---
+// A quotation line reads "line number, quotation, book chapter verse"; busy entries end a form with
+// compact lists ("book chapter verse, verse; chapter verse ... + next book"). The OCR often garbles the
+// chapter letters, so a line may give only its book. Columns are found from the text itself.
+const raws=new Map();   // pdf page index -> [{x0,x1,y,str}] including digits-only items, page width
+// all page caches belong to one document: another PDF starts them afresh, and a read that
+// finishes after the PDF was changed is not stored
+let rawDoc=null;
+const sameDoc=doc=>{ if(doc!==rawDoc){ rawDoc=doc; cache.clear(); overlays.clear(); raws.clear(); lineCache.clear(); } };
+async function rawItems(doc, idx){
+  sameDoc(doc);
+  if(raws.has(idx)) return raws.get(idx);
+  const p=await doc.getPage(idx+1), vp=p.getViewport({scale:1}), tc=await p.getTextContent();
+  const list=tc.items.filter(i=>i.str&&i.str.trim()).map(i=>{
+    const [x,y]=vp.convertToViewportPoint(i.transform[4],i.transform[5]);
+    return i.dir==='rtl'?{x0:x-i.width,x1:x,y,str:i.str}:{x0:x,x1:x+i.width,y,str:i.str};
+  });
+  const out={list,W:vp.width,H:vp.height}; if(doc===rawDoc) raws.set(idx,out); return out;
+}
+// OCR spellings of the abbreviated names: דה * ב, דה - ב, ש - א, שמואל - א, מלכים - ב ...
+const normBooks=s=>s.replace(/דה\s*["*\-]\s*([אב])/g,'דה"$1 ').replace(/(^|\s)([שמ])\s*["*\-]\s*([אב])(?![א-ת])/g,'$1$2"$3 ')
+  .replace(/שמואל\s*-?\s*([אב])(?![א-ת])/g,'ש"$1').replace(/מלכים\s*-?\s*([אב])(?![א-ת])/g,'מ"$1').replace(/שיר\s*השירים/g,'שה"ש');
+const FINAL={'ך':'כ','ם':'מ','ן':'נ','ף':'פ','ץ':'צ'};
+const ckey=s=>s.replace(/[^א-ת]/g,'').replace(/[ךםןףץ]/g,c=>FINAL[c]);
+// a chapter written in Hebrew letters: hundreds, then at most one tens and one units letter (קמח, יט),
+// with טו / טז for 15 and 16; 0 when the letters are not such a number (the OCR often merges a verse in)
+function chapterNum(w){
+  const m=w.replace(/"/g,'').match(/^([קרשת]?)(?:(ט[וז])|([יכלמנסעפצ]?)([אבגדהוזחט]?))$/);
+  if(!m||!m[0]) return 0;
+  return hebNum(m[0].replace(/"/g,''));
+}
+// {book, ch, vs} references of one line; st carries the book and chapter from line to line in a compact list
+function scanLine(str, st){
+  const t=normBooks(str).match(/[א-ת"]+|\d+/g)||[], out=[];
+  let i=0;
+  if(t.length&&/^\d/.test(t[0])){            // a numbered quotation line: its reference starts at the last book name
+    st.book=null; st.ch=0; i=-1;
+    for(let k=t.length-1;k>0;k--) if(bookOf(t[k])){ i=k; break; }
+    if(i<0) return out;
+  }
+  let afterBook=false, bare=null;
+  for(;i<t.length;i++){
+    const w=t[i], b=/[א-ת]{2}/.test(w)?bookOf(w):null;
+    if(b){ if(bare) out.push(bare); st.book=NAME.get(b); st.ch=0; bare={book:st.book,ch:0,vs:0}; afterBook=true; continue; }
+    if(!st.book) continue;
+    if(/^[א-ת"]{1,4}$/.test(w)){ const n=chapterNum(w); st.ch=n<=CHAPTERS[st.book]?n:0; if(!st.ch) bare=bare&&{...bare,odd:true}; afterBook=false; continue; }
+    if(/^\d+$/.test(w)){
+      const n=+w;
+      if(afterBook&&w.length>=3) st.ch=0;      // chapter letters read as digits
+      else if(st.ch&&n>=1&&n<=176){ out.push({book:st.book,ch:st.ch,vs:n}); bare=null; }
+      else if(bare&&!bare.vs&&!bare.odd&&n>=1&&n<=176) bare.vs=n;   // the verse of a line whose chapter is missing
+    }
+    afterBook=false;
+  }
+  if(bare) out.push(bare);
+  return out;
+}
+const lineCache=new Map(), ORDER=new Map(BOOKS.map(([,en],i)=>[en,i]));
+// [{col, y, q (a numbered quotation line), words, refs}] of a page in reading order: right column first, top to bottom
+async function lineRefs(doc, idx){
+  sameDoc(doc);
+  if(lineCache.has(idx)) return lineCache.get(idx);
+  const {list,W}=await rawItems(doc,idx);
+  // columns: the two emptiest vertical strips in the middle thirds of the page
+  const cov=new Float32Array(Math.ceil(W)+1);
+  for(const it of list) for(let x=Math.max(0,Math.floor(it.x0));x<=Math.min(W,Math.ceil(it.x1));x++) cov[x]++;
+  const valley=(a,b)=>{ let best=1e9,bx=Math.round((a+b)/2); for(let x=Math.round(a);x<Math.round(b);x++){ const v=cov[x-1]+cov[x]+cov[x+1]; if(v<best){best=v;bx=x;} } return bx; };
+  const g1=valley(W*.27,W*.45), g2=valley(W*.55,W*.73);
+  const colOf=it=>{ const m=(it.x0+it.x1)/2; return m>g2?0:m>g1?1:2; };
+  const out=[];
+  for(let c=0;c<3;c++){
+    const lines=[];
+    for(const it of list.filter(i=>colOf(i)===c).sort((a,b)=>a.y-b.y)){
+      if(it.y<14) continue;                     // running heads
+      const ln=lines.find(l=>Math.abs(l.y-it.y)<3.5); ln?ln.items.push(it):lines.push({y:it.y,items:[it]});
+    }
+    const st={book:null,ch:0};
+    for(const ln of lines.sort((a,b)=>a.y-b.y)){
+      const row=ln.items.sort((a,b)=>b.x1-a.x1), str=row.map(i=>logical(i.str)).join(' ');
+      // a line's references are in biblical order (the OCR scrambles the order of digit runs)
+      const refs=scanLine(str,st).sort((a,b)=>(ORDER.get(a.book)-ORDER.get(b.book))||(a.ch-b.ch)||(a.vs-b.vs));
+      out.push({col:c, y:ln.y, q:/^\d/.test(str.trim()), words:str.split(/\s+/).map(ckey).filter(Boolean), refs});
+    }
+  }
+  if(doc===rawDoc) lineCache.set(idx,out); return out;
+}
+window.ESRefs={books:BOOKS, lt:LT, hebNum, fullRef,refsAt, pageRefs, drawOverlay, parse, logical, lineRefs, ckey,
+  clear:()=>{cache.clear();overlays.clear();raws.clear();lineCache.clear();}};
 })();
